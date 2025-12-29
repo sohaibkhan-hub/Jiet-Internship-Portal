@@ -29,15 +29,22 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Connect to MongoDB and start the server
-connectDB()
-  .then(() => {
     const port = process.env.PORT || 4000;
 
     // Start the server
     app.listen(port, () => {
       console.log(`Server is running on port: ${port}`);
     });
+
+// Connect to MongoDB and start the server
+connectDB()
+  .then(() => {
+    // const port = process.env.PORT || 4000;
+
+    // // Start the server
+    // app.listen(port, () => {
+    //   console.log(`Server is running on port: ${port}`);
+    // });
 
     // Error handling for server-level errors
     app.on("error", (error) => {
