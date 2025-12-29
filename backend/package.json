@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node server.js",
     "build": "echo \"No build step defined\"",
-    "dev": "nodemon src/index.js",
+    "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
