@@ -1,0 +1,421 @@
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import ApiResponse from "../utils/ApiResponse.js";
+import { Student } from "../models/student.model.js";
+import { User } from "../models/user.model.js";
+import { Domain } from "../models/domain.model.js";
+import { Company } from "../models/company.model.js";
+
+
+// Helper to update allocationStatusHistory for timeline
+function setTimelineStatus(student, currentStatus, nextStatus) {
+  if (!student.internshipData) student.internshipData = {};
+  student.internshipData.approvalStatus = nextStatus;
+  // If allocationStatus is NOT_ALLOCATED, also update approvalStatus
+  if (currentStatus !== "ALLOCATED") {
+    student.internshipData.allocationStatus = "NOT_ALLOCATED";
+  }
+  if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+    student.internshipData.approvalStatusHistory = [];
+  }
+  let history = student.internshipData.approvalStatusHistory;
+  // Add SUBMITTED if not present, or update its date if present
+  const idx = history.findIndex(h => h.status === currentStatus);
+  if (idx === -1) {
+    history.push({ status: currentStatus, createdAt: new Date() });
+  } else {
+    history[idx].createdAt = new Date();
+  }
+  // Add next status (PENDING_REVIEW) if provided and not present
+  if (nextStatus && !history.some(h => h.status === nextStatus)) {
+    history.push({ status: nextStatus, createdAt: null });
+  }
+  student.internshipData.approvalStatusHistory = history;
+}
+
+// Get Student Profile
+const getStudentProfile = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: userId })
+    .populate("branch", "name code programType specializations")
+    .populate("internshipData.preferredDomains", "name description");
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, student, "Student profile fetched successfully")
+    );
+});
+
+// Update Student Profile (Personal Details)
+const updateStudentProfile = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const {
+    fullName,
+    fatherName,
+    dateOfBirth,
+    gender,
+    category,
+    phoneNumber,
+    parentPhoneNumber,
+    educationHistory,
+  } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: userId });
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  // Update fields if provided
+  if (fullName) student.fullName = fullName;
+  if (fatherName) student.fatherName = fatherName;
+  if (dateOfBirth) student.dateOfBirth = dateOfBirth;
+  if (gender) student.gender = gender;
+  if (category) student.category = category;
+
+  if (phoneNumber) {
+    student.contact.phoneNumber = phoneNumber;
+  }
+
+  if (parentPhoneNumber) {
+    student.contact.parentPhoneNumber = parentPhoneNumber;
+  }
+
+  if (educationHistory && Array.isArray(educationHistory)) {
+    student.educationHistory = educationHistory;
+  }
+
+  await student.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, student, "Student profile updated successfully")
+    );
+});
+
+// Update domain
+const updateStudentDomain = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { domains } = req.body; // Expecting an array of domain ObjectIds
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: userId });
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  if (!Array.isArray(domains) || domains.length === 0) {
+    throw new ApiError(400, "Domains array is required");
+  }
+
+  // Fetch branchId from student
+  const branchId = student.branch;
+  if (!branchId) {
+    throw new ApiError(400, "Student branch not found");
+  }
+
+  // Fetch all domains and verify
+  const { Domain } = await import("../models/domain.model.js");
+  const foundDomains = await Domain.find({ _id: { $in: domains }, isActive: true });
+
+  if (foundDomains.length !== domains.length) {
+    throw new ApiError(400, "One or more domains are invalid or inactive");
+  }
+
+  // Check if all domains are applicable to the student's branch
+  const invalidDomains = foundDomains.filter(domain => {
+    return !domain.applicableBranches.some(b => b.equals(branchId));
+  });
+
+  if (invalidDomains.length > 0) {
+    throw new ApiError(400, `Some domains are not applicable to your branch: ${invalidDomains.map(d => d.name).join(", ")}`);
+  }
+
+  // Only update preferredDomains, do not overwrite other internshipData fields
+  student.set("internshipData.preferredDomains", domains);
+  await student.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, {}, "Student preferred domains updated successfully")
+    );
+});
+
+// Update Survey Preferences (Table 2 Data)
+const updateSurveyPreferences = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const {
+    isParticipating,
+    alternativeCareerPath,
+    expectedSalary,
+    preferredDomains,
+  } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: userId });
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  // Update survey data
+  if (isParticipating !== undefined) {
+    student.internshipData.isParticipating = isParticipating;
+  }
+
+  if (isParticipating === false && alternativeCareerPath) {
+    student.internshipData.alternativeCareerPath = alternativeCareerPath;
+  }
+
+  if (expectedSalary) {
+    student.internshipData.expectedSalary = expectedSalary;
+  }
+
+  if (preferredDomains && Array.isArray(preferredDomains)) {
+    student.internshipData.preferredDomains = preferredDomains;
+  }
+
+  await student.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        student,
+        "Survey preferences updated successfully"
+      )
+    );
+});
+
+// Submit Internship Choices (4 Priority Choices, with companyId, domainId, location, priority)
+const submitInternshipChoices = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { choices } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  // validate application already submitted
+  const studentCheck = await Student.findOne({ user: userId });
+  if (studentCheck.internshipData.isFormSubmitted) {
+    throw new ApiError(400, "Internship choices have already been submitted and cannot be modified");
+  }
+
+  if (!choices || !Array.isArray(choices) || choices.length === 0) {
+    throw new ApiError(400, "At least one choice is required");
+  }
+  if (choices.length > 4) {
+    throw new ApiError(400, "Maximum 4 choices allowed");
+  }
+
+  // Validate each choice structure and priorities
+  const priorities = new Set();
+  for (let i = 0; i < choices.length; i++) {
+    const c = choices[i];
+    if (!c.companyId || !c.domainId || !c.location || !c.priority) {
+      throw new ApiError(400, `Choice ${i + 1} must have companyId, domainId, location, and priority`);
+    }
+    if (typeof c.priority !== "number" || c.priority < 1 || c.priority > 4) {
+      throw new ApiError(400, "Priority must be between 1 and 4");
+    }
+    if (priorities.has(c.priority)) {
+      throw new ApiError(400, "Duplicate priorities are not allowed");
+    }
+    priorities.add(c.priority);
+  }
+
+  const student = await Student.findOne({ user: userId });
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  // 1. Verify all companies exist, are active, and OPEN, and match the domainId
+  const companyIds = choices.map(c => c.companyId);
+  const { Company } = await import("../models/company.model.js");
+  const companies = await Company.find({ _id: { $in: companyIds }, isActive: true, recruitmentStatus: "OPEN" }).populate("domainTags");
+  if (companies.length !== companyIds.length) {
+    throw new ApiError(400, "One or more companies are invalid, inactive, or not open for recruitment");
+  }
+
+  // 2. For each choice, check company-domain match and student preference
+  const preferredDomains = (student.internshipData.preferredDomains || []).map(d => d.toString());
+  const mismatched = [];
+  for (let i = 0; i < choices.length; i++) {
+    const { companyId, domainId } = choices[i];
+    // Check company exists
+    const company = companies.find(c => c._id.toString() === companyId);
+    if (!company) {
+      mismatched.push({ companyId, reason: "Company not found or not open" });
+      continue;
+    }
+    // Check company has the domainId
+    const companyDomains = (company.domainTags || []).map(d => d._id ? d._id.toString() : d.toString());
+    if (!companyDomains.includes(domainId)) {
+      mismatched.push({ companyId, reason: "Company does not offer this domain" });
+    }
+    // Check student preference
+    if (!preferredDomains.includes(domainId)) {
+      mismatched.push({ companyId, reason: "Domain not in student preferences" });
+    }
+  }
+  if (mismatched.length > 0) {
+    throw new ApiError(400, `Invalid choices: ${mismatched.map(m => `${m.companyId} (${m.reason})`).join(", ")}`);
+  }
+
+  // Save choices in the new structure, including domain (company, domain, location, priority)
+
+    student.internshipData.choices = choices.map(c => ({
+      company: c.companyId.toString(),
+      domain: c.domainId.toString(),
+      location: c.location,
+      priority: c.priority,
+    }));
+    student.internshipData.isFormSubmitted = true;
+    student.internshipData.approvalStatus = "SUBMITTED";
+
+   // For initial submission, next status is PENDING_REVIEW
+    setTimelineStatus(student, "SUBMITTED", "PENDING_REVIEW");
+
+  // Optionally, if you want to immediately mark as pending review (e.g., auto-forward to TPO):
+  // updateAllocationStatus(student, "PENDING_REVIEW");
+  // student.internshipData.approvalStatus = "PENDING_REVIEW";
+  // Only call the above when TPO actually starts review in your TPO review handler.
+
+  await student.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, student, "Internship choices submitted successfully" )
+    );
+});
+
+// Get Application Status
+const getApplicationStatus = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: userId })
+    .populate("internshipData.choices.company", "name location domainTags")
+    .populate("internshipData.allocatedCompany", "name location domainTags");
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  const applicationStatus = {
+    formSubmitted: student.internshipData.isFormSubmitted,
+    approvalStatus: student.internshipData.approvalStatus,
+    allocationStatus: student.internshipData.allocationStatus,
+    choices: student.internshipData.choices,
+    allocatedCompany: student.internshipData.allocatedCompany,
+  };
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        applicationStatus,
+        "Application status fetched successfully"
+      )
+    );
+});
+
+// Get all companies for a given domainId (with all conditions)
+const getAllCompaniesWithDomains = asyncHandler(async (req, res) => {
+  const { domainId } = req.params;
+  if (!domainId) {
+    throw new ApiError(400, "domainId is required in params");
+  }
+  // Validate domain exists and is active
+  const domain = await Domain.findOne({ _id: domainId, isActive: true });
+  if (!domain) {
+    throw new ApiError(404, "Domain not found or inactive");
+  }
+  // Find all companies with this domain, isActive, and recruitmentStatus OPEN
+  const companies = await Company.find({
+    isActive: true,
+    recruitmentStatus: "OPEN",
+    domainTags: domainId,
+  })
+    .populate("domainTags", "name description isActive")
+    .sort({ name: 1 });
+
+  return res.status(200).json(
+    new ApiResponse(200, companies, "Companies for domain fetched successfully")
+  );
+});
+
+export {
+  getStudentProfile,
+  updateStudentProfile,
+  updateSurveyPreferences,
+  submitInternshipChoices,
+  getApplicationStatus,
+  updateStudentDomain,
+  getAllCompaniesWithDomains,
+};

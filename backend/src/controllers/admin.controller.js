@@ -1,0 +1,917 @@
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import ApiResponse from "../utils/ApiResponse.js";
+import { Student } from "../models/student.model.js";
+import { User } from "../models/user.model.js";
+import { Branch } from "../models/branch.model.js";
+import { Domain } from "../models/domain.model.js";
+import xlsx from "xlsx";
+import { Faculty } from "../models/faculty.model.js";
+
+// Utility: Generate 6-digit temporary password
+function generateTempPassword() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Utility: Clean Excel-like values ("--", "NULL", "0000-00-00")
+function cleanValue(val) {
+  if (val === undefined || val === null) return "";
+  if (typeof val === "string" && ["--", "NULL", "null", "0000-00-00", ""].includes(val.trim())) return "";
+  return val;
+}
+
+// Register Single Student
+const registerStudent = asyncHandler(async (req, res) => {
+  const { email, fullName, rollNumber, registrationNumber, fatherName, dateOfBirth, phoneNumber, branchId, year } = req.body;
+
+  const userId = req.user?._id;
+  let newUser = null;
+  let newStudent = null;
+  try {
+    if (!userId) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+    if (user.role !== "ADMIN" && user.role !== "TPO") {
+      throw new ApiError(403, "Only admin and TPO can register students");
+    }
+
+    // ============ VALIDATION ============
+
+    // Check required User fields
+    if (!email || !fullName || !rollNumber || !registrationNumber || !fatherName || !dateOfBirth || !phoneNumber || !branchId || !year) {
+      throw new ApiError( 400, "All fields are required");
+    }
+
+    // College email validation
+    if (!email.endsWith("@jietjodhpur.ac.in")) {
+      throw new ApiError(400, "Register with a valid college email");
+    }
+
+    // Phone number validation (10 digits)
+    if(!/^\d{10}$/.test(phoneNumber)) {
+      throw new ApiError(400, "Phone number must be 10 digits");
+    }
+
+    // Check if User already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      throw new ApiError(409, "User with this email already exists");
+    }
+
+    // Check if Student with same rollNumber already exists
+    const existingStudent = await Student.findOne({ rollNumber });
+    if (existingStudent) {
+      throw new ApiError(409, "Student with this roll number already exists");
+    }
+
+    // Verify branch exists
+    const branch = await Branch.findById(branchId);
+    if (!branch) {
+      throw new ApiError(404, "Branch not found");
+    }
+
+    // Generate 6-digit temp password
+    // NOTE: password is used for login (hashed), tempPassword is stored in plain text for reference (e.g., to show to user/admin)
+    // Always use the value in tempPassword for login, as password is set to the same value and then hashed
+    const password = generateTempPassword();
+
+    // ============ CREATE USER ============
+    newUser = await User.create({
+      email,
+      password,
+      tempPassword: password,
+      role: "STUDENT",
+      fullName,
+      provider: "LOCAL",
+      isEmailVerified: false,
+    });
+
+    // ============ CREATE STUDENT PROFILE ============
+    newStudent = await Student.create({
+      user: newUser._id,
+      fullName,
+      rollNumber,
+      registrationNumber: registrationNumber || "",
+      fatherName: fatherName || "",
+      dateOfBirth: cleanValue(dateOfBirth) || null,
+      email,
+      phoneNumber: phoneNumber || "",
+      branch: branchId,
+      year: year || "",
+      isActive: true,
+    });
+
+    // ============ LINK USER TO STUDENT PROFILE ============
+    newUser.profileId = newStudent._id;
+    await newUser.save({ validateBeforeSave: false });
+
+    return res.status(201).json( new ApiResponse( 201, {},"Student registered successfully" )
+    );
+  } catch (error) {
+    // Rollback: delete created user and student if any error occurs
+    if (newStudent && newStudent._id) {
+      try { await Student.findByIdAndDelete(newStudent._id); } catch (cleanupErr) {}
+    }
+    if (newUser && newUser._id) {
+      try { await User.findByIdAndDelete(newUser._id); } catch (cleanupErr) {}
+    }
+    throw error;
+  }
+});
+
+// Register Faculty (Admin/TPO only)
+const registerFaculty = asyncHandler(async (req, res) => {
+  const { email, role, fullName, employeeId, branchId, phoneNumber, designation, dateOfBirth } = req.body;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+  
+  // Validate required fields
+  if (!email || !role || !fullName || !branchId || !phoneNumber || !designation || !dateOfBirth) {
+    throw new ApiError(400, "All required fields must be provided");
+  }
+
+  // College email validation
+  if (!email.endsWith("@jietjodhpur.ac.in")) {
+    throw new ApiError(400, "Register with a valid college email");
+  }
+
+  // Phone number validation (10 digits)
+  if(!/^\d{10}$/.test(phoneNumber)) {
+    throw new ApiError(400, "Phone number must be 10 digits");
+  }
+
+  // Check if user already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    throw new ApiError(409, "User with this email already exists");
+  }
+
+  // Check if faculty already exists
+  const existingFaculty = await Faculty.findOne({ email });
+  if (existingFaculty) {
+    throw new ApiError(409, "Faculty with this email already exists");
+  }
+
+  // Check employeeId uniqueness
+  if (employeeId) {
+    const empIdExists = await Faculty.findOne({ employeeId });
+    if (empIdExists) {
+      throw new ApiError(409, "Faculty with this employee ID already exists");
+    }
+  }
+
+  // Check branch existence or not
+  const branch = await Branch.findById(branchId);
+  
+  if (!branch) {
+    throw new ApiError(404, "Branch not found");
+  }
+
+  const password = generateTempPassword();
+
+  // role must be Admin, TPO, Faculty only
+  if (!["ADMIN", "TPO", "FACULTY"].includes(role)) {
+    throw new ApiError(400, "Invalid role. Must be one of: ADMIN, TPO, FACULTY");
+  }
+
+  let newUser = null;
+  let newFaculty = null;
+  try {
+    // Create new user
+    newUser = await User.create({
+      email,
+      password,
+      tempPassword: password,
+      role,
+      fullName: fullName || "",
+      provider: "LOCAL",
+    });
+
+    // ============ CREATE FACULTY PROFILE ============
+    newFaculty = await Faculty.create({
+      user: newUser._id,
+      email: email,
+      fullName,
+      dateOfBirth: cleanValue(dateOfBirth) || null,
+      employeeId: employeeId || "",
+      designation: designation || "",
+      phoneNumber: phoneNumber || "",
+      branch: branchId || "",
+      isActive: true,
+    });
+
+    // ============ LINK USER TO FACULTY PROFILE ============
+    newUser.profileId = newFaculty._id;
+    await newUser.save({ validateBeforeSave: false });
+
+    // ============ PREPARE RESPONSE ============
+    const userResponse = await User.findById(newUser._id);
+    const facultyResponse = await Faculty.findById(newFaculty._id).populate(
+      "branch",
+      "name code programType"
+    );
+
+    return res.status(201).json(
+      new ApiResponse(
+        201,
+        {
+          user: userResponse,
+          faculty: facultyResponse,
+        },
+        "Faculty registered successfully"
+      )
+    );
+  } catch (error) {
+    // Rollback: delete created user and faculty if any error occurs
+    if (newFaculty && newFaculty._id) {
+      await Faculty.findByIdAndDelete(newFaculty._id);
+    }
+    if (newUser && newUser._id) {
+      await User.findByIdAndDelete(newUser._id);
+    }
+    throw error;
+  }
+});
+
+// Get All Students (For TPO Dashboard)
+const getAllStudents = asyncHandler(async (req, res) => {
+  const { branch, allocationStatus, isFormSubmitted } = req.query;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const filter = {};
+
+  if (branch) {
+    filter.branch = branch;
+  }
+
+  if (allocationStatus) {
+    filter["internshipData.allocationStatus"] = allocationStatus;
+  }
+
+  if (isFormSubmitted !== undefined) {
+    filter["internshipData.isFormSubmitted"] = isFormSubmitted === "true";
+  }
+
+  const students = await Student.find(filter)
+    .populate("branch", "name code programType")
+    .populate("user", "email")
+    .populate("internshipData.allocatedCompany", "name")
+    .sort({ fullName: 1 });
+
+  if (!students || students.length === 0) {
+    throw new ApiError(404, "No students found");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, students, "Students fetched successfully")
+    );
+});
+
+const getAllFaculties = asyncHandler(async (req, res) => {
+  
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const faculties = await Faculty.find()
+    .populate("branch", "name code programType")
+    .populate("user", "email role")
+    .sort({ fullName: 1 });
+
+  if (!faculties || faculties.length === 0) {
+    throw new ApiError(404, "No faculties found");
+  }
+
+  // Map to include role in the top-level faculty object for easier frontend consumption
+  const facultiesWithRole = faculties.map(faculty => {
+    const facultyObj = faculty.toObject();
+    facultyObj.role = facultyObj.user && facultyObj.user.role ? facultyObj.user.role : undefined;
+    return facultyObj;
+  });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, facultiesWithRole, "Faculties fetched successfully")
+    );
+});
+
+const getAllStudentsApplications = asyncHandler(async (req, res) => {
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const students = await Student.find({"internshipData.isFormSubmitted": true})
+    .populate("branch", "name code programType")
+    .populate("user", "email")
+    .populate("internshipData.allocatedCompany", "name")
+    .populate("internshipData.preferredDomains", "name description")
+    .populate({
+      path: "internshipData.choices.company",
+      select: "name"
+    })
+    .populate({
+      path: "internshipData.choices.domain",
+      select: "name description"
+    })
+    .sort({ createdDate: 1 });
+
+  if (!students || students.length === 0) {
+    throw new ApiError(404, "No students found");
+  }
+
+  console.log("data", students);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, students, "Students fetched successfully")
+    );
+});
+
+
+
+
+
+
+
+
+
+//   Temperory Admin Controllers
+
+// Bulk Student registration from table (Excel upload)
+const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
+  // If file is uploaded, parse Excel file
+  let students = [];
+  if (req.files && req.files.length > 0) {
+    const file = req.files[0];
+    const workbook = xlsx.readFile(file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    students = xlsx.utils.sheet_to_json(worksheet);
+  } else if (req.body.students) {
+    // Fallback: if students array is sent as JSON
+    students = req.body.students;
+    if (typeof students === "string") {
+      try {
+        students = JSON.parse(students);
+      } catch (e) {
+        throw new ApiError(400, "Invalid students JSON");
+      }
+    }
+  }
+
+  if (!Array.isArray(students) || students.length === 0) {
+    throw new ApiError(400, "No student data provided");
+  }
+
+  const results = [];
+  for (let i = 0; i < students.length; i++) {
+    const row = students[i];
+    let newUser = null;
+    let newStudent = null;
+    try {
+      // Map Excel fields to model fields
+      const fullName = cleanValue(row.stu_name);
+      const rollNumber = cleanValue(row.stu_no) || cleanValue(row["Roll No."]);
+      const registrationNumber = cleanValue(row.reg_no);
+      const fatherName = cleanValue(row.father_name);
+      // Fix: dateOfBirth should come from row.dob and be parsed as Date if valid
+      let dateOfBirth = cleanValue(row.dob);
+      if (dateOfBirth) {
+        // Try to parse as date (Excel may give as string or number)
+        if (!isNaN(Number(dateOfBirth))) {
+          // Excel date as number (days since 1899-12-31)
+          dateOfBirth = xlsx.SSF ? xlsx.SSF.parse_date_code(Number(dateOfBirth)) : null;
+          if (dateOfBirth) {
+            // Convert to JS Date
+            dateOfBirth = new Date(dateOfBirth.y, dateOfBirth.m - 1, dateOfBirth.d);
+          } else {
+            dateOfBirth = null;
+          }
+        } else {
+          // Try to parse as string
+          const parsed = new Date(dateOfBirth);
+          dateOfBirth = isNaN(parsed.getTime()) ? null : parsed;
+        }
+        // Remove time part, keep only date (YYYY-MM-DD)
+        if (dateOfBirth instanceof Date && !isNaN(dateOfBirth.getTime())) {
+          // Set time to 00:00:00 UTC and store as string YYYY-MM-DD
+          const yyyy = dateOfBirth.getUTCFullYear();
+          const mm = String(dateOfBirth.getUTCMonth() + 1).padStart(2, '0');
+          const dd = String(dateOfBirth.getUTCDate()).padStart(2, '0');
+          dateOfBirth = `${yyyy}-${mm}-${dd}`;
+        }
+      } else {
+        dateOfBirth = null;
+      }
+      let email = cleanValue(row.stu_mailid);
+      if (typeof email === "string") {
+        email = email.replace(/\s+/g, "").trim();
+      }
+      // Fix: phoneNumber should come from row.stuot_mobilephone or row["stuot_mobilephone"], and trim extra spaces
+      let phoneNumber = cleanValue(row.stuot_mobilephone) || "";
+      if (typeof phoneNumber === "string") {
+        phoneNumber = phoneNumber.replace(/\s+/g, "").trim();
+      }
+      const branchId = cleanValue(row.branch_id); // external branch id from excel
+      const collegeId = cleanValue(row.colg); // external college id from excel
+      const year = parseInt(cleanValue(row.studentYr)); // year from excel
+      // Generate 6-digit temp password
+      // NOTE: password is used for login (hashed), tempPassword is stored in plain text for reference (e.g., to show to user/admin)
+      const password = generateTempPassword();
+
+      // Check if User already exists
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        results.push({ row: i + 1, email, status: "skipped", reason: "User with this email already exists" });
+        continue;
+      }
+      // Check if Student with same rollNumber already exists
+      const existingStudent = await Student.findOne({ rollNumber });
+      if (existingStudent) {
+        results.push({ row: i + 1, rollNumber, status: "skipped", reason: "Student with this roll number already exists" });
+        continue;
+      }
+      // Find branch by external mapping
+      const branch = await Branch.findOne({
+        externalMappings: {
+          $elemMatch: {
+            branchId: branchId,
+            collegeId: collegeId,
+            year: year
+          }
+        }
+      });
+
+      if (!branch) {
+        results.push({ row: i + 1, branchId, collegeId, year, status: "error", error: "Branch not found for mapping" });
+        continue;
+      }
+
+      // Create User
+      newUser = await User.create({
+        email,
+        password,
+        tempPassword: password,
+        role: "STUDENT",
+        firstName: fullName.split(" ")[0] || "",
+        lastName: fullName.split(" ").slice(1).join(" ") || "",
+        fullName,
+        provider: "LOCAL",
+        isEmailVerified: false,
+      });
+
+      // Create Student
+      newStudent = await Student.create({
+        user: newUser._id,
+        fullName,
+        rollNumber,
+        registrationNumber: registrationNumber || "",
+        fatherName: fatherName || "",
+        dateOfBirth: dateOfBirth || null,
+        email,
+        phoneNumber: phoneNumber || "",
+        branch: branch._id,
+        isActive: true,
+        year,
+      });
+
+      // Link User to Student
+      newUser.profileId = newStudent._id;
+      await newUser.save({ validateBeforeSave: false });
+
+      results.push({ row: i + 1, email, rollNumber, status: "created", tempPassword: password });
+    } catch (err) {
+      // Try to include email if available in row
+      let errorEmail = cleanValue(row.stu_mailid) || cleanValue(row.email) || null;
+
+      // Cleanup: If user or student was created, remove them
+      if (newStudent && newStudent._id) {
+        try {
+          await Student.findByIdAndDelete(newStudent._id);
+        } catch (cleanupErr) {
+          // Optionally log cleanup error
+        }
+      }
+      if (newUser && newUser._id) {
+        try {
+          await User.findByIdAndDelete(newUser._id);
+        } catch (cleanupErr) {
+          // Optionally log cleanup error
+        }
+      }
+
+      results.push({ row: i + 1, email: errorEmail, status: "error", error: err.message });
+    }
+  }
+
+  // Only return failed/skipped students (status: "error" or "skipped")
+  const failed = results.filter(r => r.status === "error" || r.status === "skipped");
+  return res.status(201).json(
+    new ApiResponse(201, failed, "Bulk student registration: failed/skipped students only")
+  );
+});
+
+// Test actual student bulk linkage and existence
+const testActualStudentBulk = asyncHandler(async (req, res) => {
+  console.log("testActualStudentBulk called");
+  let students = [];
+  if (req.files && req.files.length > 0) {
+    const file = req.files[0];
+    const workbook = xlsx.readFile(file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    students = xlsx.utils.sheet_to_json(worksheet);
+  } else if (req.body.students) {
+    students = req.body.students;
+    if (typeof students === "string") {
+      try {
+        students = JSON.parse(students);
+      } catch (e) {
+        throw new ApiError(400, "Invalid students JSON");
+      }
+    }
+  }
+
+  if (!Array.isArray(students) || students.length === 0) {
+    throw new ApiError(400, "No student data provided");
+  }
+
+  const failedDetails = [];
+  for (let i = 0; i < students.length; i++) {
+    const row = students[i];
+    let email = row.stu_mailid || row.email;
+    if (typeof email === "string") {
+      email = email.replace(/\s+/g, "").trim();
+    }
+    const rollNumber = row.stu_no || row["Roll No."] || row.rollNumber;
+    let status = "ok";
+    let error = "";
+    // Check User exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      status = "error";
+      error = "User not found";
+    }
+    // Check Student exists
+    const student = await Student.findOne({ $or: [ { email }, { rollNumber } ] });
+    if (!student) {
+      status = "error";
+      error = error ? error + ", Student not found" : "Student not found";
+    }
+    // Check linkage if both exist
+    if (user && student) {
+      if (!user.profileId || String(user.profileId) !== String(student._id)) {
+        status = "error";
+        error = error ? error + ", User.profileId mismatch" : "User.profileId mismatch";
+      }
+      if (!student.user || String(student.user) !== String(user._id)) {
+        status = "error";
+        error = error ? error + ", Student.user mismatch" : "Student.user mismatch";
+      }
+    }
+    if (status === "error" && email) {
+      failedDetails.push({ row: i + 1, email, status, error });
+    }
+  }
+  return res.status(200).json(
+    new ApiResponse(200, failedDetails, "Details of students with failed linkage or missing records")
+  );
+});
+
+// Bulk Domain Registration from table (Excel upload)
+const bulkDomainRegistrationFromTable = asyncHandler(async (req, res) => {
+  let students = [];
+  if (req.files && req.files.length > 0) {
+    const file = req.files[0];
+    const workbook = xlsx.readFile(file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    students = xlsx.utils.sheet_to_json(worksheet);
+  } else if (req.body.students) {
+    students = req.body.students;
+    if (typeof students === "string") {
+      try {
+        students = JSON.parse(students);
+      } catch (e) {
+        throw new ApiError(400, "Invalid students JSON");
+      }
+    }
+  }
+
+  if (!Array.isArray(students) || students.length === 0) {
+    throw new ApiError(400, "No student data provided");
+  }
+
+  const failed = [];
+  const userNotFound = [];
+  const alreadyRegistered = [];
+  for (let i = 0; i < students.length; i++) {
+    const row = students[i];
+    // Extract fields
+    const email = (row["Official College Email ID"] || row["email"] || "").toLowerCase().trim();
+    const branchName = (row["Branch"] || "").trim();
+    const participateRaw = (row["Would you like to participate in Campus Placement Drive?"] || "").trim().toLowerCase();
+    const altCareer = (row["If not interested in campus placement, which career path are you considering?"] || "").trim();
+    const domainRaw = row["DOMAIN"] || row["Domain"] || "";
+    const salary = row["Salary"] || "";
+
+    // 1. Check User exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      userNotFound.push({ row: i + 1, email, branch: branchName, reason: "User not found", status: "error" });
+      continue;
+    }
+    // 2. Check Student exists
+    const student = await Student.findOne({ email });
+    if (!student) {
+      failed.push({ row: i + 1, email, branch: branchName, reason: "Student not found", status: "error" });
+      continue;
+    }
+    // 3. Check Branch exists and matches (case-insensitive, trimmed)
+    const branch = await Branch.findOne({ _id: student.branch });
+    if (!branch || branch.name.trim().toLowerCase() !== branchName.trim().toLowerCase()) {
+      // Try fallback: match ignoring specializations (if present)
+      const allBranches = await Branch.find({});
+      const altBranch = allBranches.find(b => b.name.trim().toLowerCase() === branchName.trim().toLowerCase());
+      if (altBranch) {
+        // Use altBranch for domain matching
+        student.branch = altBranch._id;
+      } else {
+        failed.push({ row: i + 1, email, branch: branchName, reason: "Branch mismatch or not found", status: "error" });
+        continue;
+      }
+    }
+    // 4. Parse and check all domains exist by name only (no branch check)
+    let domainNames = [];
+    if (typeof domainRaw === "string") {
+      // Only split on newlines and carriage returns, NOT commas
+      domainNames = domainRaw.split(/\n|\r/).map(d => d.trim()).filter(Boolean);
+    } else if (Array.isArray(domainRaw)) {
+      domainNames = domainRaw.map(d => (typeof d === "string" ? d.trim() : "")).filter(Boolean);
+    }
+    // Check all domains exist by name only (robust match: ignore case, trim, normalize spaces and parentheses)
+    function normalizeDomainName(str) {
+      return (str || "")
+        .replace(/\s+/g, " ") // collapse multiple spaces
+        .replace(/\s*\(/g, " (") // ensure space before (
+        .replace(/\)\s*/g, ")") // remove space after )
+        .trim()
+        .toLowerCase();
+    }
+
+    // Levenshtein distance for fuzzy matching
+    function levenshtein(a, b) {
+      if (a.length === 0) return b.length;
+      if (b.length === 0) return a.length;
+      const matrix = [];
+      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1, // substitution
+              matrix[i][j - 1] + 1,     // insertion
+              matrix[i - 1][j] + 1      // deletion
+            );
+          }
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    const allDomains = await Domain.find({});
+    const foundDomains = [];
+    const missingDomains = [];
+    for (const dName of domainNames) {
+      const normInput = normalizeDomainName(dName);
+      const match = allDomains.find(d => normalizeDomainName(d.name) === normInput);
+      if (!match) {
+        // Fuzzy match: find closest DB domain name
+        let closest = null;
+        let minDist = Infinity;
+        for (const d of allDomains) {
+          const dist = levenshtein(normInput, normalizeDomainName(d.name));
+          if (dist < minDist) {
+            minDist = dist;
+            closest = d.name;
+          }
+        }
+        missingDomains.push(`${dName}${closest && minDist <= 5 ? ` (Did you mean: ${closest}?)` : ""}`);
+      } else {
+        foundDomains.push(match._id);
+      }
+    }
+    if (missingDomains.length > 0) {
+      failed.push({ row: i + 1, email, branch: branchName, reason: `Domains not found: ${missingDomains.join(", ")}`, status: "error" });
+      continue;
+    }
+
+    // 5. Check if domains already registered
+    const currentDomains = (student.internshipData && Array.isArray(student.internshipData.preferredDomains))
+      ? student.internshipData.preferredDomains.map(id => id.toString())
+      : [];
+    const newDomains = foundDomains.map(id => id.toString());
+    const alreadyMatch = currentDomains.length === newDomains.length && currentDomains.every(id => newDomains.includes(id));
+    if (alreadyMatch) {
+      alreadyRegistered.push({ row: i + 1, email, branch: branchName, domains: domainNames, status: "already_registered" });
+      continue;
+    }
+    // Update student internshipData
+    try {
+      student.internshipData = student.internshipData || {};
+      // isParticipating
+      if (participateRaw === "yes") {
+        student.internshipData.isParticipating = true;
+        student.internshipData.alternativeCareerPath = "";
+      } else {
+        student.internshipData.isParticipating = false;
+        student.internshipData.alternativeCareerPath = altCareer;
+      }
+      // Domains
+      student.internshipData.preferredDomains = foundDomains;
+      // Salary
+      if (salary) student.internshipData.expectedSalary = salary;
+      await student.save();
+    } catch (err) {
+      failed.push({ row: i + 1, email, branch: branchName, reason: err.message, status: "error" });
+    }
+  }
+  return res.status(200).json(
+    new ApiResponse(200, {
+      userNotFound,
+      failed,
+      alreadyRegistered
+    }, "Bulk domain registration: failed/skipped students only")
+  );
+});
+
+// Manual Domain Registeration for a Student
+const manualDomainStudentRegistration = asyncHandler(async (req, res) => {
+  // Input: { email, branchName, participate, altCareer, domainIds, salary }
+  const { email, branchName, participate, altCareer, domainIds, salary } = req.body;
+
+  if (!email || !branchName || !Array.isArray(domainIds) || domainIds.length === 0) {
+    return res.status(200).json(false);
+  }
+
+  // 1. Check User exists
+  const user = await User.findOne({ email: email.toLowerCase().trim() });
+  if (!user) {
+    return res.status(200).json(false);
+  }
+  // 2. Check Student exists
+  const student = await Student.findOne({ email: email.toLowerCase().trim() });
+  if (!student) {
+    return res.status(200).json(false);
+  }
+  // 3. Check Branch exists and matches (case-insensitive, trimmed)
+  const branch = await Branch.findOne({ _id: student.branch });
+  if (!branch || branch.name.trim().toLowerCase() !== branchName.trim().toLowerCase()) {
+    // Try fallback: match ignoring specializations (if present)
+    const allBranches = await Branch.find({});
+    const altBranch = allBranches.find(b => b.name.trim().toLowerCase() === branchName.trim().toLowerCase());
+    if (altBranch) {
+      student.branch = altBranch._id;
+    } else {
+      return res.status(200).json(false);
+    }
+  }
+  // 4. Check all domainIds exist
+  const allDomains = await Domain.find({ _id: { $in: domainIds } });
+  if (allDomains.length !== domainIds.length) {
+    return res.status(200).json(false);
+  }
+  // 5. Check if domains already registered
+  const currentDomains = (student.internshipData && Array.isArray(student.internshipData.preferredDomains))
+    ? student.internshipData.preferredDomains.map(id => id.toString())
+    : [];
+  const newDomains = domainIds.map(id => id.toString());
+  const alreadyMatch = currentDomains.length === newDomains.length && currentDomains.every(id => newDomains.includes(id));
+  if (alreadyMatch) {
+    return res.status(200).json({ status: "already_registered", domains: domainIds });
+  }
+  // Update student internshipData
+  try {
+    student.internshipData = student.internshipData || {};
+    // isParticipating
+    if (participate === "yes") {
+      student.internshipData.isParticipating = true;
+      student.internshipData.alternativeCareerPath = "";
+    } else {
+      student.internshipData.isParticipating = false;
+      student.internshipData.alternativeCareerPath = altCareer || "";
+    }
+    // Domains
+    student.internshipData.preferredDomains = domainIds;
+    // Salary
+    if (salary) student.internshipData.expectedSalary = salary;
+    await student.save();
+    return res.status(200).json({ status: "updated", domains: domainIds });
+  } catch (err) {
+    return res.status(200).json(false);
+  }
+});
+
+const getTestStudentProfile = asyncHandler(async (req, res) => {
+  const {email} = req.body;
+
+  if (!email) {
+    throw new ApiError(401, "email not provided");
+  }
+
+  const user = await User.findOne({ email: email });
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: user._id })
+    .populate("branch", "name code programType specializations")
+    .populate("internshipData.preferredDomains", "name description");
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, student, "Student profile fetched successfully")
+    );
+});
+
+export {
+  registerStudent,
+  registerFaculty,
+  getAllStudents,
+  getAllFaculties,
+  getAllStudentsApplications,
+  bulkRegisterStudentsFromTable,
+  getTestStudentProfile,
+  testActualStudentBulk,
+  bulkDomainRegistrationFromTable,
+  manualDomainStudentRegistration,
+};

@@ -1,0 +1,13 @@
+pre {
+  background-color: lightgray;
+  border: 1px solid gray;
+  width: 100%;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+table pre {
+  padding: 3px;
+  width: 80%;
+  margin: 0;
+}
