@@ -4,6 +4,7 @@ import ApiResponse from "../utils/ApiResponse.js";
 import { Company } from "../models/company.model.js";
 import { Branch } from "../models/branch.model.js";
 import { Domain } from "../models/domain.model.js";
+import { User } from "../models/user.model.js";
 
 // Create Company (TPO only)
 const addCompany = asyncHandler(async (req, res) => {
@@ -260,6 +261,47 @@ const getCompanySeats = asyncHandler(async (req, res) => {
     );
 });
 
+// get all companies with branch details
+const getAllCompaniesWithBranch = asyncHandler(async (req, res) => {
+
+  const branchId = req.query.branchId;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  let filter = {};
+  if (branchId) {
+    // Only companies where allowedBranches contains branchId
+    filter = { allowedBranches: branchId };
+  }
+
+  const companies = await Company.find(filter)
+    .populate("allowedBranches", "name code programType specializations")
+    .populate("domainTags", "name description");
+
+  if (!companies || companies.length === 0) {
+    throw new ApiError(404, "No companies found");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, companies, "Companies with details fetched successfully")
+    );
+});
+
 export {
   addCompany,
   getAllCompanies,
@@ -268,4 +310,5 @@ export {
   updateCompanyDetails,
   updateCompanySeats,
   getCompanySeats,
+  getAllCompaniesWithBranch,
 };

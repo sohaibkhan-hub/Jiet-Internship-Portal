@@ -31,8 +31,38 @@ function ApplicationStatus(props) {
           <HeaderProfile />
           <div className="mt-4 px-0 md:px-8">
             <h3 className="text-xl font-semibold !text-gray-700 mb-4 border-b pb-2">Application Status</h3>
-            {currentData && currentData.isFormSubmitted && currentData.approvalStatusHistory.length > 0 ? (
-              <Timeline history={currentData.approvalStatusHistory} />
+            {currentData && (
+              (
+                (currentData.isFormSubmitted && Array.isArray(currentData.approvalStatusHistory) && currentData.approvalStatusHistory.length > 0)
+                ||
+                (currentData.approvalStatus === 'REJECTED' && Array.isArray(currentData.approvalStatusHistory) && currentData.approvalStatusHistory.length > 0)
+              )
+            ) ? (
+              <div className="px-0 md:!px-4">  
+                <Timeline history={currentData.approvalStatusHistory} />
+                {currentData.approvalStatus === 'REJECTED' && (
+                  <div className="max-w-2xl mx-auto border border-red-200 text-red-700 rounded-2xl px-2 gap-6 mt-8 md:mt-16 flex flex-col items-center">
+                    <div className="flex items-center justify-center mt-3">
+                      <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12l2.5 2.5L16 9" />
+                      </svg>
+                    </div>
+                    <h4 className="font-bold text-xl text-center mb-2 text-red-700">Your Application Was Not Approved</h4>
+                    <p className="text-gray-700 !text-base text-center px-2 mb-2">
+                      Thank you for your interest in the internship program. 
+                      Unfortunately, your application was not approved at this time.
+                    </p>
+                    <div className="bg-red-50 border border-red-100 rounded-lg px-2 py-2 mt-2 w-full text-center">
+                      <span className="font-semibold text-red-700">Reason Provided:</span>
+                      <span className="ml-2 text-red-600">{currentData.rejectionReason || "Not specified by admin."}</span>
+                    </div>
+                    <p className="text-sm text-gray-400 mt-4 text-center">
+                      If you have questions or believe this was a mistake, please contact the Training & Placement Office for further assistance.
+                    </p>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-10 my-6">
                 <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -52,7 +82,7 @@ function ApplicationStatus(props) {
           <div className="pt-0 md:!pt-12">
             {currentData && currentData.isFormSubmitted && currentData.approvalStatusHistory.length > 0 ? (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {/* Header Bar */}
+                {/* Header Bar */} 
                 <button
                   className="w-full flex items-center justify-between px-6 py-3 bg-white hover:bg-gray-50 transition-colors duration-200"
                   onClick={() => setShowDetails((prev) => !prev)}
@@ -113,7 +143,7 @@ function ApplicationStatus(props) {
                                   {/* Company Details */}
                                   <div className="flex-1">
                                     <div className="font-semibold text-gray-800 text-sm md:text-base">
-                                      {choice.company}
+                                      {choice.company.name}
                                     </div>
                                     <div className="flex items-center text-xs text-gray-500 mt-0.5">
                                       <MdPlace className="mr-1 text-gray-400" /> {choice.location}
@@ -167,8 +197,8 @@ function ApplicationStatus(props) {
                       {/* Item 4 */}
                       <div>
                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Allocated ID</label>
-                        <div className="font-mono text-sm text-gray-600 truncate" title={currentData.allocatedCompany}>
-                          {currentData.allocatedCompany || 'N/A'}
+                        <div className="font-mono text-sm text-gray-600 truncate" title={currentData.allocatedCompany?.name}>
+                          {currentData.allocatedCompany?.name || 'N/A'}
                         </div>
                       </div>
 

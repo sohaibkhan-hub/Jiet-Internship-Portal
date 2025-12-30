@@ -13,6 +13,8 @@ import StudentList from "./StudentList";
 import CompanyList from "../faculty/CompanyList";
 import RegisterFaculty from "./RegisterFaculty";
 import FacultyList from "./FacultyList";
+import StudentProfileUpdate from "./StudentProfileUpdate";
+import { BsListCheck } from "react-icons/bs";
 
 const MENU_CONFIG = [
   {
@@ -35,15 +37,21 @@ const MENU_CONFIG = [
   },
   {
     label: "Register Student",
-    icon: MdPersonAdd,
+    icon: MdSchool,
     key: "registerStudent",
     component: RegisterStudent,
   },
-    {
+  {
     label: "Register Faculty",
     icon: MdPersonAdd,
     key: "registerFaculty",
     component: RegisterFaculty,
+  },
+  {
+    label: "Student Application",
+    icon: MdAssignment,
+    key: "studentApplicationList",
+    component: StudentApplicationList,
   },
   // {
   //   label: "Add Domain",
@@ -59,21 +67,15 @@ const MENU_CONFIG = [
   // },
   {
     label: "Branch List",
-    icon: MdList,
+    icon: MdDeviceHub,
     key: "branchList",
     component: BranchList,
   },
   {
     label: "Domain List",
-    icon: MdViewList,
+    icon: MdDomain,
     key: "domainList",
     component: DomainList,
-  },
-  {
-    label: "Student Application",
-    icon: MdAssignment,
-    key: "studentApplicationList",
-    component: StudentApplicationList,
   },
   {
     label: "Student List",
@@ -83,9 +85,15 @@ const MENU_CONFIG = [
   },
   {
     label: "Faculty List",
-    icon: MdPeople,
+    icon: MdDns,
     key: "facultyList",
     component: FacultyList,
+  },
+  {
+    label: "Update Student ",
+    icon: BsListCheck,
+    key: "updateStudent",
+    component: StudentProfileUpdate,
   },
 ];
 

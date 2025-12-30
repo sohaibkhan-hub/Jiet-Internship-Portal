@@ -36,4 +36,32 @@ export const adminService = {
     const response = await api.post('/students/update-student', data);
     return response.data.data;
   },
+
+  async getStudentDetails(email) {
+    const response = await api.get(`/admins/student-details/${email}`);
+    
+    return response.data.data; // Extract data from ApiResponse wrapper
+  },
+
+  async updateStudent(data)  {
+    const response = await api.post('/admins/update-student', data);
+    return response.data;
+  },
+
+  async allocateCompany(studentId)  {
+    const response = await api.post('/admins/allocate-company', { studentId });
+    return response.data;
+  },
+
+  async rejectApplication(studentId, reason)  {
+    const response = await api.post('/admins/reject-application', { studentId, reason });
+    return response.data;
+  },
+
+  async updateAllocatedCompany(studentId, companyId)  {
+    console.log("cccC", studentId, companyId);
+    
+    const response = await api.post('/admins/update-allocated-company', { studentId, companyId });
+    return response.data;
+  },
 };

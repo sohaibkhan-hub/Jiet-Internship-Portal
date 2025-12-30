@@ -190,6 +190,11 @@ const studentSchema = new mongoose.Schema(
         },
       ],
 
+      rejectionReason: {
+        type: String,
+        trim: true,
+      },
+
       // The Final Result
       allocatedCompany: {
         type: mongoose.Schema.Types.ObjectId,

@@ -7,32 +7,6 @@ import { Domain } from "../models/domain.model.js";
 import { Company } from "../models/company.model.js";
 
 
-// Helper to update allocationStatusHistory for timeline
-function setTimelineStatus(student, currentStatus, nextStatus) {
-  if (!student.internshipData) student.internshipData = {};
-  student.internshipData.approvalStatus = nextStatus;
-  // If allocationStatus is NOT_ALLOCATED, also update approvalStatus
-  if (currentStatus !== "ALLOCATED") {
-    student.internshipData.allocationStatus = "NOT_ALLOCATED";
-  }
-  if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
-    student.internshipData.approvalStatusHistory = [];
-  }
-  let history = student.internshipData.approvalStatusHistory;
-  // Add SUBMITTED if not present, or update its date if present
-  const idx = history.findIndex(h => h.status === currentStatus);
-  if (idx === -1) {
-    history.push({ status: currentStatus, createdAt: new Date() });
-  } else {
-    history[idx].createdAt = new Date();
-  }
-  // Add next status (PENDING_REVIEW) if provided and not present
-  if (nextStatus && !history.some(h => h.status === nextStatus)) {
-    history.push({ status: nextStatus, createdAt: null });
-  }
-  student.internshipData.approvalStatusHistory = history;
-}
-
 // Get Student Profile
 const getStudentProfile = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
@@ -317,6 +291,7 @@ const submitInternshipChoices = asyncHandler(async (req, res) => {
   }
 
   // Save choices in the new structure, including domain (company, domain, location, priority)
+    student.internshipData = student.internshipData || {};
 
     student.internshipData.choices = choices.map(c => ({
       company: c.companyId.toString(),
@@ -324,16 +299,17 @@ const submitInternshipChoices = asyncHandler(async (req, res) => {
       location: c.location,
       priority: c.priority,
     }));
+
     student.internshipData.isFormSubmitted = true;
-    student.internshipData.approvalStatus = "SUBMITTED";
+    student.internshipData.approvalStatus = "PENDING_REVIEW";
+    student.internshipData.allocationStatus = "NOT_ALLOCATED";
 
-   // For initial submission, next status is PENDING_REVIEW
-    setTimelineStatus(student, "SUBMITTED", "PENDING_REVIEW");
+    if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+      student.internshipData.approvalStatusHistory = [];
+    }
 
-  // Optionally, if you want to immediately mark as pending review (e.g., auto-forward to TPO):
-  // updateAllocationStatus(student, "PENDING_REVIEW");
-  // student.internshipData.approvalStatus = "PENDING_REVIEW";
-  // Only call the above when TPO actually starts review in your TPO review handler.
+    student.internshipData.approvalStatusHistory.push({ status: "SUBMITTED", createdAt: new Date() });
+    student.internshipData.approvalStatusHistory.push({ status: "PENDING_REVIEW", createdAt: null });
 
   await student.save();
 

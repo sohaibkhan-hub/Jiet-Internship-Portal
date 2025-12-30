@@ -241,33 +241,32 @@ function BranchList() {
                         <table className="min-w-full text-left border-collapse">
                             <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm">
                                 <tr>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch Name</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Code</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">College</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Program Type</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">HOD Name</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">HOD Email</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Created At</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch Name</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Code</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">College</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Program Type</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">HOD Name</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">HOD Email</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Created At</th>
+                                    {/* <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th> */}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filteredBranches.length > 0 ? (
                                     filteredBranches.map((branch) => (
-                                        <tr key={branch._id} className="hover:bg-red-50/30 transition-colors group">
-                                            <td className="py-4 px-6 align-top">
+                                        <tr key={branch._id} className="hover:bg-red-50/30 transition-colors group ">
+                                            <td className="py-3 px-3 align-top max-w-[220px]">
                                                 <div className="font-bold text-gray-800 text-sm">{branch.name}</div>
-                                                <div className="text-xs text-gray-400 font-mono mt-1">ID: {branch._id}</div>
                                             </td>
-                                            <td className="py-4 px-6 align-top">{branch.code}</td>
-                                            <td className="py-4 px-6 align-top">{branch.college}</td>
-                                            <td className="py-4 px-6 align-top">{branch.programType}</td>
-                                            <td className="py-4 px-6 align-top">{branch.hodName}</td>
-                                            <td className="py-4 px-6 align-top">{branch.hodEmail}</td>
-                                            <td className="py-4 px-6 align-top">{getStatusBadge(branch.isActive)}</td>
-                                            <td className="py-4 px-6 align-top">{new Date(branch.createdAt).toLocaleDateString()}</td>
-                                            <td className="py-4 px-6 align-top text-right">
+                                            <td className="py-3 px-3 align-top">{branch.code}</td>
+                                            <td className="py-3 px-3 align-top">{branch.college}</td>
+                                            <td className="py-3 px-3 align-top">{branch.programType}</td>
+                                            <td className="py-3 px-3 align-top">{branch.hodName}</td>
+                                            <td className="py-3 px-3 align-top">{branch.hodEmail}</td>
+                                            <td className="py-3 px-3 align-top">{getStatusBadge(branch.isActive)}</td>
+                                            <td className="py-3 px-3 align-top">{new Date(branch.createdAt).toLocaleDateString()}</td>
+                                            {/* <td className="py-3 px-3 align-top text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
                                                         <MdEdit className="text-lg" />
@@ -276,7 +275,7 @@ function BranchList() {
                                                         <MdDelete className="text-lg" />
                                                     </button>
                                                 </div>
-                                            </td>
+                                            </td> */}
                                         </tr>
                                     ))
                                 ) : (

@@ -1,10 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { toast } from 'react-toastify';
-import { branchDomainService } from '../../services/branchDomainService';
 import { companyService } from '../../services/companyService';
 
 const initialState = {
   allCompanies: [],
+  allCompaniesByBranch: [],
   loading: false,
   error: null,
 };
@@ -45,6 +44,21 @@ export const getAllCompaniesAsync = createAsyncThunk(
       return response;
     } catch (error) {
       const message = error?.response?.data || 'Failed to fetch companies';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const getAllCompaniesByBranchAsync = createAsyncThunk(
+  'company/getAllCompaniesByBranch',
+  async (branchId, { rejectWithValue }) => {
+    // Accept branchId as string, not object
+    const id = typeof branchId === 'object' && branchId.branchId ? branchId.branchId : branchId;
+    try {
+      const response = await companyService.getAllCompaniesByBranch(id); 
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Failed to fetch companies by branch';
       return rejectWithValue(message);
     }
   }
@@ -91,6 +105,19 @@ const companySlice = createSlice({
         state.error = null;
       })
       .addCase(getAllCompaniesAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(getAllCompaniesByBranchAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllCompaniesByBranchAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.allCompaniesByBranch = action.payload;
+        state.error = null;
+      })
+      .addCase(getAllCompaniesByBranchAsync.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

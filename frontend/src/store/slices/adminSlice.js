@@ -75,6 +75,71 @@ export const getAllStudentApplicationDetailsAsync = createAsyncThunk(
   }
 );
 
+export const getStudentDetailsAsync = createAsyncThunk(
+  'admin/getStudentDetails',
+  async (email, { rejectWithValue }) => {
+    try {
+      const response = await adminService.getStudentDetails(email); 
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Failed to fetch students data';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const updateStudentAsync = createAsyncThunk(
+  'admin/updateStudent',
+  async (studentData, { rejectWithValue }) => {
+    try {
+      const response = await adminService.updateStudent(studentData);
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Register student failed';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const allocateCompanyAsync = createAsyncThunk(
+  'admin/allocateCompany',
+  async ({ studentId }, { rejectWithValue }) => {
+    try {
+      const response = await adminService.allocateCompany(studentId);
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Allocate company failed';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const rejectApplicationAsync = createAsyncThunk(
+  'admin/rejectApplication',
+  async ({ studentId, reason }, { rejectWithValue }) => {
+    try {
+      const response = await adminService.rejectApplication(studentId, reason);
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Reject application failed';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const updateAllocatedCompanyAsync = createAsyncThunk(
+  'admin/updateAllocatedCompany',
+  async ({ studentId, companyId }, { rejectWithValue }) => {
+    try {
+      const response = await adminService.updateAllocatedCompany(studentId, companyId);
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Reject application failed';
+      return rejectWithValue(message);
+    }
+  }
+);
+
 const adminSlice = createSlice({
   name: 'admin',
   initialState,
@@ -141,6 +206,66 @@ const adminSlice = createSlice({
         state.error = null;
       })
       .addCase(getAllStudentApplicationDetailsAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateStudentAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateStudentAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(updateStudentAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(getStudentDetailsAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getStudentDetailsAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(getStudentDetailsAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(allocateCompanyAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(allocateCompanyAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(allocateCompanyAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(rejectApplicationAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(rejectApplicationAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(rejectApplicationAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateAllocatedCompanyAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateAllocatedCompanyAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(updateAllocatedCompanyAsync.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

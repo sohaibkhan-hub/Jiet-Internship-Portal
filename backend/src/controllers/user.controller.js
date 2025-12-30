@@ -85,7 +85,14 @@ const getCurrentUser = asyncHandler(async (req, res) => {
   if (user.role === "STUDENT" && user.profileId) {
     profileData = await Student.findById(user.profileId)
       .populate("branch", "name code programType")
-      .populate("internshipData.preferredDomains", "name description");
+      .populate("internshipData.preferredDomains", "name description")
+      .populate("internshipData.allocatedCompany", "name description")
+      .populate({
+        path: "internshipData.choices",
+        populate: [
+          { path: "company", select: "name company description" },
+        ]
+      });
   } else if ((user.role === "FACULTY"|| user.role === "ADMIN")  && user.profileId) {
     profileData = await Faculty.findById(user.profileId).populate("branch", "name code programType");
   }
@@ -105,8 +112,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 const changePassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword, confirmPassword } = req.body;
   const userId = req.user?._id;
-  console.log(req.body);
-  
+
   if (!userId) {
     throw new ApiError(401, "Unauthorized");
   }
@@ -124,8 +130,7 @@ const changePassword = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findById(userId).select("+password");
-  console.log("rdr", user);
-  
+
   if (!user) {
     throw new ApiError(404, "User not found");
   }

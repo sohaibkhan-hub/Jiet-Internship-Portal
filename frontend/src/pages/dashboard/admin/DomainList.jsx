@@ -173,7 +173,7 @@ function DomainList() {
                                 )}
                             </div>
                             {/* Branch Filter */}
-                            <div className="relative w-full max-w-xs" ref={branchDropdownRef}>
+                            <div className="relative w-full md:col-span-2" style={{ minWidth: '180px', maxWidth: '320px' }} ref={branchDropdownRef}>
                                 <button
                                     type="button"
                                     className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
@@ -186,7 +186,12 @@ function DomainList() {
                                         }
                                     }}
                                 >
-                                    {filters.branch === 'ALL' ? 'All Branches' : (allBranches.find(b => b._id === filters.branch)?.name || 'Branch')}
+                                    <span
+                                        className="block truncate max-w-[200px]"
+                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                    >
+                                        {filters.branch === 'ALL' ? 'All Branches' : (allBranches.find(b => b._id === filters.branch)?.name || 'Branch')}
+                                    </span>
                                     <MdArrowDropDown className="ml-2 text-gray-400" />
                                 </button>
                                 {branchDropdownOpen && (
@@ -236,31 +241,31 @@ function DomainList() {
                                 <table className="min-w-full text-left border-collapse">
                                     <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm">
                                         <tr>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Domain Name</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Applicable Branches</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Created At</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                            <th className="py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Domain Name</th>
+                                            <th className="py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Applicable Branches</th>
+                                            <th className="py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                                            <th className="py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Created At</th>
+                                            <th className="py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {filteredDomains.length > 0 ? (
                                             filteredDomains.map((domain) => (
                                                 <tr key={domain._id} className="hover:bg-red-50/30 transition-colors group">
-                                                    <td className="py-4 px-6 align-top">
-                                                        <div className="font-bold text-gray-800 text-sm">{domain.name}</div>
+                                                    <td className="py-3 px-6 align-top max-w-[170px]">
+                                                        <div className="font-bold text-gray-800 text-sm break-words">{domain.name}</div>
                                                         <div className="text-xs text-gray-400 font-mono mt-1">ID: {domain._id}</div>
                                                     </td>
-                                                    <td className="py-4 px-6 align-top">
+                                                    <td className="py-3 px-6 align-top max-w-[370px]">
                                                         <div className="flex flex-wrap gap-1">
                                                             {getBranchNames(domain.applicableBranches).map((b, idx) => (
                                                                 <span key={b + idx} className="px-2 py-1 rounded bg-gray-100 text-xs text-gray-700 border border-gray-200">{b}</span>
                                                             ))}
                                                         </div>
                                                     </td>
-                                                    <td className="py-4 px-6 align-top">{getStatusBadge(domain.isActive)}</td>
-                                                    <td className="py-4 px-6 align-top">{new Date(domain.createdAt).toLocaleDateString()}</td>
-                                                    <td className="py-4 px-6 align-top text-right">
+                                                    <td className="py-3 px-6 align-top">{getStatusBadge(domain.isActive)}</td>
+                                                    <td className="py-3 px-6 align-top">{new Date(domain.createdAt).toLocaleDateString()}</td>
+                                                    <td className="py-3 px-6 align-top text-right">
                                                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
                                                                 <MdEdit className="text-lg" />

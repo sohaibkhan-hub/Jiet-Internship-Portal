@@ -6,8 +6,10 @@ import ChangePassword from "../admin/ChangePassword";
 import StudentProfile from "./StudentProfile";
 import UpdateDomain from "./updateDomain";
 import InternshipGuidelines from "./InternshipGuidlines";
-import { MdPermIdentity, MdAddCircle, MdDns, MdSettings } from "react-icons/md";
+import { MdPermIdentity, MdAddCircle, MdDns, MdSettings, MdDomain, MdBusinessCenter, MdAssignmentInd, MdBusiness } from "react-icons/md";
 import { BsListCheck } from "react-icons/bs";
+import { FaUserEdit } from "react-icons/fa";
+import CompanyList from "../faculty/CompanyList";
 
 const MENU_CONFIG = [
   {
@@ -24,28 +26,28 @@ const MENU_CONFIG = [
   },
   {
     label: "Update Domains",
-    icon: MdDns,
+    icon: MdDomain,
     key: "domain",
     component: UpdateDomain,
   },
   {
     label: "Apply Company",
-    icon: MdAddCircle,
+    icon: MdBusinessCenter,
     key: "company",
     component: CompanyChoice,
   },
   {
-    label: "Change Password",
-    icon: MdSettings,
-    key: "changepwd",
-    component: ChangePassword,
+    label: "Company List",
+    icon: MdBusiness,
+    key: "companyList",
+    component: CompanyList,
   },
   {
     label: "Internship Guidelines",
     icon: BsListCheck,
     key: "guidelines",
     component: InternshipGuidelines,
-  },
+  }
 ];
 
 function StudentDashboard() {
@@ -69,7 +71,7 @@ function StudentDashboard() {
       if (window.innerWidth < 768) {
         return collapsed ? 64 : 0;
       } else {
-        return collapsed ? 64 : 272;
+        return collapsed ? 64 : 288;
       }
     }
     // fallback for SSR

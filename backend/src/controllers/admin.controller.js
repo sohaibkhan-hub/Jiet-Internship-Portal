@@ -5,6 +5,7 @@ import { Student } from "../models/student.model.js";
 import { User } from "../models/user.model.js";
 import { Branch } from "../models/branch.model.js";
 import { Domain } from "../models/domain.model.js";
+import { Company } from "../models/company.model.js";
 import xlsx from "xlsx";
 import { Faculty } from "../models/faculty.model.js";
 
@@ -359,7 +360,13 @@ const getAllStudentsApplications = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Only admin and TPO can register students");
   }
 
-  const students = await Student.find({"internshipData.isFormSubmitted": true})
+  // Allow applications where isFormSubmitted is true OR approvalStatus is REJECTED
+  let students = await Student.find({
+    $or: [
+      { "internshipData.isFormSubmitted": true },
+      { "internshipData.approvalStatus": "REJECTED" }
+    ]
+  })
     .populate("branch", "name code programType")
     .populate("user", "email")
     .populate("internshipData.allocatedCompany", "name")
@@ -371,14 +378,23 @@ const getAllStudentsApplications = asyncHandler(async (req, res) => {
     .populate({
       path: "internshipData.choices.domain",
       select: "name description"
-    })
-    .sort({ createdDate: 1 });
+    });
+
+  // Sort: PENDING_REVIEW first, then by createdAt (oldest first)
+  students = students.sort((a, b) => {
+    const aPending = a.internshipData && a.internshipData.approvalStatus === 'PENDING_REVIEW';
+    const bPending = b.internshipData && b.internshipData.approvalStatus === 'PENDING_REVIEW';
+    if (aPending && !bPending) return -1;
+    if (!aPending && bPending) return 1;
+    // Both same status: sort by createdAt (oldest first)
+    const aDate = a.createdAt || 0;
+    const bDate = b.createdAt || 0;
+    return aDate - bDate;
+  });
 
   if (!students || students.length === 0) {
     throw new ApiError(404, "No students found");
   }
-
-  console.log("data", students);
 
   return res
     .status(200)
@@ -387,8 +403,341 @@ const getAllStudentsApplications = asyncHandler(async (req, res) => {
     );
 });
 
+// Get Students Details
+const getStudentDetails = asyncHandler(async (req, res) => {
+  
+  const userId = req.user?._id;
 
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
 
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const email = req.params.email;
+
+  if (!email) {
+    throw new ApiError(400, "Email not provided");
+  }
+
+  // Find student by email (student.email field)
+  const studentData = await Student.findOne({ email })
+    .populate({
+      path: "user",
+      select: "email role fullName firstName lastName profileImage isActive isEmailVerified",
+    })
+    .populate("branch", "name code programType specializations")
+    .populate("internshipData.preferredDomains", "name description")
+    .populate("internshipData.allocatedCompany", "name")
+    .populate("internshipData.choices.company", "name")
+    .populate("internshipData.choices.domain", "name description");
+
+  if (!studentData) {
+    throw new ApiError(404, "Student not found");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, studentData, "Student details fetched successfully")
+  );
+});
+
+// Update Student Details (Admin: update all fields of user and student by email)
+const updateStudentProfile = asyncHandler(async (req, res) => {
+  const {
+    email, // required
+    fullName,
+    fatherName,
+    dateOfBirth,
+    phoneNumber,
+    rollNumber,
+    registrationNumber,
+    branchId,
+    year,
+  } = req.body;
+
+  // Extract password and isFormSubmitted separately
+  const password = req.body.password;
+  const isFormSubmitted = req.body.isFormSubmitted;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const userD = await User.findById(userId);
+
+  if (!userD) {
+    throw new ApiError(404, "User not found");
+  }
+  if (userD.role !== "ADMIN" && userD.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  if (!email) {
+    throw new ApiError(400, "Email is required");
+  }
+
+  // Find user and student by email
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  const student = await Student.findOne({ email });
+  if (!student) {
+    throw new ApiError(404, "Student not found");
+  }
+
+  // If branchId is provided, verify branch exists before updating
+  if (branchId) {
+    const branchExists = await Branch.findById(branchId);
+    if (!branchExists) {
+      throw new ApiError(404, "Branch not found");
+    }
+    student.branch = branchId;
+  }
+
+  // Update User fields
+  if (typeof fullName === "string") user.fullName = fullName;
+  if (typeof password === "string" && password.length > 0) {
+    user.password = password;
+  }
+
+  await user.save();
+
+  // Update Student fields
+  if (typeof fullName === "string") student.fullName = fullName;
+  if (typeof fatherName === "string") student.fatherName = fatherName;
+  if (typeof dateOfBirth === "string") student.dateOfBirth = dateOfBirth;
+  if (typeof gender === "string") student.gender = gender;
+  if (typeof category === "string") student.category = category;
+  if (typeof phoneNumber === "string") student.phoneNumber = phoneNumber;
+  if (typeof rollNumber === "string") student.rollNumber = rollNumber;
+  if (typeof registrationNumber === "string") student.registrationNumber = registrationNumber;
+  // branch is now only set above if branchId is provided and valid
+  if (typeof year === "string") student.year = year;
+
+  // Update isFormSubmitted in internshipData only if present
+  if (typeof isFormSubmitted === "boolean") {
+    student.internshipData = student.internshipData || {};
+    student.internshipData.isFormSubmitted = isFormSubmitted;
+  }
+
+  await student.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, {}, "Student profile updated successfully")
+  );
+});
+
+// Allocate Company to Student by Choice Priority
+const allocateCompanyToStudent = asyncHandler(async (req, res) => {
+  // Accept either studentId or studentEmail
+  const { studentId } = req.body;
+
+  if (!studentId) {
+    throw new ApiError(400, "studentId is required");
+  }
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const student = await Student.findById(studentId);
+
+  // Already allocated?
+  if (student.internshipData && student.internshipData.allocatedCompany) {
+    throw new ApiError(400, `Student already allocated to a company: ${student.internshipData.allocatedCompany}`);
+  }
+
+  // Get choices (should be array of up to 4)
+  const choices = (student.internshipData && Array.isArray(student.internshipData.choices)) ? student.internshipData.choices : [];
+  if (!choices.length) {
+    throw new ApiError(400, "No choices found for student");
+  }
+
+  // Try each choice by priority
+  student.internshipData = student.internshipData || {};
+  let allocated = null;
+  for (let i = 0; i < choices.length; i++) {
+    const choice = choices[i];
+    if (!choice.company) continue;
+    // Find company
+    const company = await Company.findById(choice.company);
+    if (!company || !company.isActive) continue;
+    // Check seat availability
+    if (company.filledSeats < company.totalSeats) {
+      // Allocate
+      student.internshipData.allocatedCompany = company._id;
+      student.internshipData.allocationStatus = "ALLOCATED";
+      student.internshipData.approvalStatus = "ALLOCATED";
+      // Update timeline history: APPROVED_BY_TPO (with date), ALLOCATED (null date)
+      if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+        student.internshipData.approvalStatusHistory = [];
+      }
+      student.internshipData.approvalStatusHistory.push({ status: "APPROVED_BY_TPO", createdAt: new Date() });
+      student.internshipData.approvalStatusHistory.push({ status: "ALLOCATED", createdAt: null });
+      await student.save();
+      // Increment filledSeats
+      company.filledSeats += 1;
+      await company.save();
+      allocated = company;
+      break;
+    }
+  }
+
+  if (allocated) {
+    return res.status(200).json(new ApiResponse(200, { allocatedCompany: allocated }, "Company allocated successfully"));
+  } else {
+    // No company available
+    student.internshipData.allocationStatus = "NOT_ALLOCATED";
+    // Update timeline history: NOT_ALLOCATED (with date)
+    if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+      student.internshipData.approvalStatusHistory = [];
+    }
+    student.internshipData.approvalStatusHistory.push({ status: "NOT_ALLOCATED", createdAt: new Date() });
+    await student.save();
+    return res.status(200).json(new ApiResponse(200, {}, "No company available for allocation"));
+  }
+});
+
+// Reject Student Application
+const rejectStudentApplication = asyncHandler(async (req, res) => {
+  const { studentId, reason } = req.body;
+
+  if (!studentId) {
+    throw new ApiError(400, "studentId is required");
+  }
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const student = await Student.findById(studentId);
+
+  if (!student) {
+    throw new ApiError(404, "Student not found");
+  }
+
+  // Update internshipData
+  student.internshipData = student.internshipData || {};
+  student.internshipData.allocationStatus = "REJECTED";
+  student.internshipData.approvalStatus = "REJECTED";
+  student.internshipData.rejectionReason = reason || "No reason provided";
+  student.internshipData.isFormSubmitted = false;
+  // remove company choices
+  student.internshipData.choices = [];
+
+  // Update timeline history: REJECTED (with date)
+  if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+    student.internshipData.approvalStatusHistory = [];
+  }
+
+  student.internshipData.approvalStatusHistory.push({ status: "REJECTED_BY_TPO", createdAt: new Date() });
+  student.internshipData.approvalStatusHistory.push({ status: "REJECTED", createdAt: null });
+
+  await student.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, {}, "Student application rejected successfully")
+  );
+});
+
+// Update Student Allocated Company (Admin/TPO)
+const updateStudentAllocatedCompany = asyncHandler(async (req, res) => {
+  const { studentId, companyId } = req.body;
+
+  if (!studentId || !companyId) {
+    throw new ApiError(400, "studentId and companyId are required");
+  }
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can register students");
+  }
+
+  const student = await Student.findById(studentId);
+  if (!student) {
+    throw new ApiError(404, "Student not found");
+  }
+
+  const company = await Company.findById(companyId);
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  // Only allow update if student already has an allocated company
+  student.internshipData = student.internshipData || {};
+  const oldCompanyId = student.internshipData.allocatedCompany;
+  if (!oldCompanyId) {
+    throw new ApiError(400, "Student does not have an allocated company to update from");
+  }
+
+  // Check if new company has available seats
+  if (company.filledSeats >= company.totalSeats) {
+    throw new ApiError(400, "No available seats in the new company");
+  }
+
+  // Update student's allocated company
+  student.internshipData.allocatedCompany = company._id;
+  await student.save();
+
+  // Increment filledSeats in new company
+  company.filledSeats += 1;
+  await company.save();
+
+  // Decrement filledSeats in old company (if different)
+  if (oldCompanyId.toString() !== company._id.toString()) {
+    const oldCompany = await Company.findById(oldCompanyId);
+    if (oldCompany && oldCompany.filledSeats > 0) {
+      oldCompany.filledSeats -= 1;
+      await oldCompany.save();
+    }
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, {}, "Student allocated company updated successfully")
+  );
+});
 
 
 
@@ -908,7 +1257,12 @@ export {
   registerFaculty,
   getAllStudents,
   getAllFaculties,
+  getStudentDetails,
+  updateStudentProfile,
   getAllStudentsApplications,
+  allocateCompanyToStudent,
+  rejectStudentApplication,
+  updateStudentAllocatedCompany,
   bulkRegisterStudentsFromTable,
   getTestStudentProfile,
   testActualStudentBulk,

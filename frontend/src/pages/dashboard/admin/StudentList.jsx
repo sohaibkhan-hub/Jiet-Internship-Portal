@@ -4,12 +4,15 @@ import HeaderProfile from "../../../components/HeaderProfile";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
 import { getAllStudentDetailsAsync } from "../../../store/slices/adminSlice";
 import { getAllBranchesAsync, getAllDomainsAsync } from "../../../store/slices/branchDomainSlice";
+import Loader from "../../../components/Loader";
 
 function StudentList() {
     // Dropdown open state for custom filters
     const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
     const branchDropdownRef = useRef(null);
     const statusDropdownRef = useRef(null);
     const domainDropdownRef = useRef(null);
@@ -37,9 +40,13 @@ function StudentList() {
     const dispatch = useAppDispatch();
 
     useEffect(() => {
-        dispatch(getAllStudentDetailsAsync());
-        dispatch(getAllDomainsAsync());
-        dispatch(getAllBranchesAsync());
+
+        setLoading(true);
+        Promise.all([
+            dispatch(getAllStudentDetailsAsync()),
+            dispatch(getAllDomainsAsync()),
+            dispatch(getAllBranchesAsync())
+        ]).finally(() => setLoading(false));
     }, [dispatch]);
 
     // Helper to close all dropdowns
@@ -114,9 +121,13 @@ function StudentList() {
         setFilters({ search: "", year: "ALL", domain: "ALL", branch: "ALL", city: "" });
     };
 
-    // ...existing code...
-    const [showFilters, setShowFilters] = React.useState(false);
-    
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader />
+            </div>
+        );
+    }
     return (
         <div className="flex bg-gradient-to-br from-gray-100 via-white to-gray-200 md:min-h-[calc(100vh-5rem)]">
             {/* Main Content */}
@@ -174,7 +185,12 @@ function StudentList() {
                                         }
                                     }}
                                 >
-                                    {filters.year === 'ALL' ? 'All Years' : filters.year}
+                                    <span
+                                        className="block truncate max-w-[40px]"
+                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                    >
+                                        {filters.year === 'ALL' ? 'All Years' : filters.year}
+                                    </span>
                                     <MdArrowDropDown className="ml-2 text-gray-400" />
                                 </button>
                                 {statusDropdownOpen && (
@@ -198,10 +214,10 @@ function StudentList() {
                                 )}
                             </div>
                             {/* Domain Filter */}
-                            <div className="relative md:col-span-2" style={{ minWidth: '220px', maxWidth: '360px' }} ref={domainDropdownRef}>
+                            <div className="relative md:col-span-2" ref={domainDropdownRef}>
                                 <button
                                     type="button"
-                                    className={`w-full min-w-[260px] max-w-[420px] flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors`}
+                                    className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors`}
                                     onClick={() => {
                                         if (!domainDropdownOpen) {
                                             closeAllDropdowns();
@@ -211,11 +227,16 @@ function StudentList() {
                                         }
                                     }}
                                 >
-                                    {filters.domain === 'ALL' ? 'Domains' : filters.domain}
+                                    <span
+                                        className="block truncate max-w-[240px]"
+                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                    >
+                                        {filters.domain === 'ALL' ? 'Domains' : filters.domain}
+                                    </span>
                                     <MdArrowDropDown className="ml-2 text-gray-400" />
                                 </button>
                                 {domainDropdownOpen && (
-                                    <div className="absolute z-20 mt-1 min-w-[260px] max-w-[420px] w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                                         <button
                                             className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.domain === 'ALL' ? 'font-bold text-red-600' : ''}`}
                                             onClick={() => { setFilters(f => ({ ...f, domain: 'ALL' })); setDomainDropdownOpen(false); }}
@@ -234,12 +255,11 @@ function StudentList() {
                                     </div>
                                 )}
                             </div>
-                            {/* Domain Filter removed (no domain data available) */}
                             {/* Branch Filter (from student data) */}
-                            <div className="relative md:col-span-2" style={{ minWidth: '220px', maxWidth: '320px' }} ref={branchDropdownRef}>
+                            <div className="relative md:col-span-2" style={{ minWidth: '180px', maxWidth: '320px' }} ref={branchDropdownRef}>
                                 <button
                                     type="button"
-                                    className={`w-full min-w-[260px] max-w-[360px] flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
+                                    className={`w-full min-w-[180px] max-w-[320px] flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
                                     onClick={() => {
                                         if (!branchDropdownOpen) {
                                             closeAllDropdowns();
@@ -249,11 +269,16 @@ function StudentList() {
                                         }
                                     }}
                                 >
-                                    {filters.branch === 'ALL' ? 'Branches' : filters.branch}
+                                    <span
+                                        className="block truncate max-w-[240px]"
+                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                    >
+                                        {filters.branch === 'ALL' ? 'Branches' : filters.branch}
+                                    </span>
                                     <MdArrowDropDown className="ml-2 text-gray-400" />
                                 </button>
                                 {branchDropdownOpen && (
-                                    <div className="absolute z-20 mt-1 min-w-[260px] max-w-[360px] w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                    <div className="absolute z-20 mt-1 min-w-[180px] max-w-[320px] w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                                         <button
                                             className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.branch === 'ALL' ? 'font-bold text-red-600' : ''}`}
                                             onClick={() => { setFilters(f => ({ ...f, branch: 'ALL' })); setBranchDropdownOpen(false); }}
@@ -303,14 +328,14 @@ function StudentList() {
                                     <table className="min-w-[1200px] w-max text-left border-collapse">
                                     <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm">
                                         <tr>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Student Name</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Year</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Roll Number</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Father Name</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">DOB</th>
-                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone No.</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Student Name</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Year</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Roll Number</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Father Name</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">DOB</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone No.</th>
                                             {/* Action column removed */}
                                         </tr>
                                     </thead>
@@ -318,14 +343,14 @@ function StudentList() {
                                         {filteredApplications.length > 0 ? (
                                             filteredApplications.map((app) => (
                                                 <tr key={app._id} className="hover:bg-red-50/30 transition-colors group">
-                                                    <td className="py-4 px-6 align-top font-bold text-gray-800 text-sm">{app.fullName}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.email}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.year}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.rollNumber}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.branch.code}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.fatherName}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.dateOfBirth}</td>
-                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{app.phoneNumber}</td>
+                                                    <td className="py-3 px-6 align-top font-bold text-gray-800 text-sm">{app.fullName}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.email}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.year}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.rollNumber}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.branch.code}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.fatherName}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.dateOfBirth}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.phoneNumber}</td>
                                                     {/* Action column removed */}
                                                 </tr>
                                             ))

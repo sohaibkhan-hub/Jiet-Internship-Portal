@@ -5,7 +5,6 @@ import { useAppSelector } from "../../../hooks/redux";
 function StudentProfile() {
 
   const { user } = useAppSelector((state) => state.auth);
-console.log("vgg", user.profile);
 
   return (
     <div className="flex bg-gradient-to-br from-gray-100 via-white to-gray-200 min-h-[100vh]">

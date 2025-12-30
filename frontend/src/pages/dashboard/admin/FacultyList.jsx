@@ -9,27 +9,12 @@ function FacultyList() {
     // Dropdown open state for custom filters
     const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
     const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
     const branchDropdownRef = useRef(null);
     const roleDropdownRef = useRef(null);
-        // Close dropdowns on outside click
-        useEffect(() => {
-            function handleClickOutside(event) {
-                if (branchDropdownOpen && branchDropdownRef.current && !branchDropdownRef.current.contains(event.target)) {
-                    setBranchDropdownOpen(false);
-                }
-                if (roleDropdownOpen && roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
-                    setRoleDropdownOpen(false);
-                }
-            }
-            document.addEventListener("mousedown", handleClickOutside);
-            return () => {
-                document.removeEventListener("mousedown", handleClickOutside);
-            };
-        }, [branchDropdownOpen, roleDropdownOpen]);
     const allFacultyDetails = useAppSelector((state) => state.admin.allFacultyDetails || []);
-    const { allBranches = [] } = useAppSelector((state) => state.domainBranch || {});
-
     const dispatch = useAppDispatch();
+    
     useEffect(() => {
         dispatch(getAllFacultyDetailsAsync());
         dispatch(getAllDomainsAsync());
@@ -41,6 +26,22 @@ function FacultyList() {
         setBranchDropdownOpen(false);
         setRoleDropdownOpen(false);
     };
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (branchDropdownOpen && branchDropdownRef.current && !branchDropdownRef.current.contains(event.target)) {
+                setBranchDropdownOpen(false);
+            }
+            if (roleDropdownOpen && roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
+                setRoleDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [branchDropdownOpen, roleDropdownOpen]);
 
     // --- FILTER STATE ---
     const [filters, setFilters] = useState({
@@ -86,9 +87,6 @@ function FacultyList() {
         setFilters({ search: "", branch: "ALL", role: "ALL" });
     };
 
-    // ...existing code...
-    const [showFilters, setShowFilters] = React.useState(false);
-
     return (
         <div className="flex bg-gradient-to-br from-gray-100 via-white to-gray-200 md:min-h-[calc(100vh-5rem)]">
             {/* Main Content */}
@@ -132,45 +130,8 @@ function FacultyList() {
                                     className="w-full pl-10 pr-4 py-2 bg-white border border-red-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500"
                                 />
                             </div>
-                            {/* Branch Filter */}
-                            <div className="relative md:col-span-2" style={{ minWidth: '180px', maxWidth: '320px' }} ref={branchDropdownRef}>
-                                <button
-                                    type="button"
-                                    className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
-                                    onClick={() => {
-                                        if (!branchDropdownOpen) {
-                                            closeAllDropdowns();
-                                            setBranchDropdownOpen(true);
-                                        } else {
-                                            setBranchDropdownOpen(false);
-                                        }
-                                    }}
-                                >
-                                    {filters.branch === 'ALL' ? 'All Branches' : filters.branch}
-                                    <MdArrowDropDown className="ml-2 text-gray-400" />
-                                </button>
-                                {branchDropdownOpen && (
-                                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                                        <button
-                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.branch === 'ALL' ? 'font-bold text-red-600' : ''}`}
-                                            onClick={() => { setFilters(f => ({ ...f, branch: 'ALL' })); setBranchDropdownOpen(false); }}
-                                        >
-                                            All Branches
-                                        </button>
-                                        {uniqueBranches.map((b) => (
-                                            <button
-                                                key={b}
-                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.branch === b ? 'font-bold text-red-600' : ''}`}
-                                                onClick={() => { setFilters(f => ({ ...f, branch: b })); setBranchDropdownOpen(false); }}
-                                            >
-                                                {b}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
                             {/* Role Filter */}
-                            <div className="relative md:col-span-1" style={{ minWidth: '120px', maxWidth: '200px' }} ref={roleDropdownRef}>
+                            <div className="relative md:col-span-2 lg:col-span-1" ref={roleDropdownRef}>
                                 <button
                                     type="button"
                                     className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${roleDropdownOpen ? 'border-red-400' : ''}`}
@@ -182,8 +143,13 @@ function FacultyList() {
                                             setRoleDropdownOpen(false);
                                         }
                                     }}
-                                >
-                                    {filters.role === 'ALL' ? 'All Roles' : filters.role}
+                                >   
+                                    <span
+                                        className="block truncate max-w-[240px]"
+                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                    >
+                                        {filters.role === 'ALL' ? 'All Roles' : filters.role}
+                                    </span>
                                     <MdArrowDropDown className="ml-2 text-gray-400" />
                                 </button>
                                 {roleDropdownOpen && (
@@ -201,6 +167,48 @@ function FacultyList() {
                                                 onClick={() => { setFilters(f => ({ ...f, role: r })); setRoleDropdownOpen(false); }}
                                             >
                                                 {r}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            {/* Branch Filter */}
+                            <div className="relative md:col-span-2" style={{ minWidth: '180px', maxWidth: '320px' }} ref={branchDropdownRef}>
+                                <button
+                                    type="button"
+                                    className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
+                                    onClick={() => {
+                                        if (!branchDropdownOpen) {
+                                            closeAllDropdowns();
+                                            setBranchDropdownOpen(true);
+                                        } else {
+                                            setBranchDropdownOpen(false);
+                                        }
+                                    }}
+                                >
+                                    <span
+                                        className="block truncate max-w-[240px]"
+                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                                    >
+                                        {filters.branch === 'ALL' ? 'All Branches' : filters.branch}
+                                    </span>
+                                    <MdArrowDropDown className="ml-2 text-gray-400" />
+                                </button>
+                                {branchDropdownOpen && (
+                                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                        <button
+                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.branch === 'ALL' ? 'font-bold text-red-600' : ''}`}
+                                            onClick={() => { setFilters(f => ({ ...f, branch: 'ALL' })); setBranchDropdownOpen(false); }}
+                                        >
+                                            All Branches
+                                        </button>
+                                        {uniqueBranches.map((b) => (
+                                            <button
+                                                key={b}
+                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.branch === b ? 'font-bold text-red-600' : ''}`}
+                                                onClick={() => { setFilters(f => ({ ...f, branch: b })); setBranchDropdownOpen(false); }}
+                                            >
+                                                {b}
                                             </button>
                                         ))}
                                     </div>

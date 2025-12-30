@@ -7,12 +7,14 @@ import {
   updateCompanyDetails,
   updateCompanySeats,
   getCompanySeats,
+  getAllCompaniesWithBranch,
 } from "../controllers/company.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router();
 
 router.post("/add-company", verifyJWT, addCompany);
 router.get("/all-companies", getAllCompanies);
+router.get("/all-companies-with-branch/:branchId", verifyJWT, getAllCompaniesWithBranch);
 router.get("/:companyId", getCompanyById);
 router.get("/eligible", getCompaniesForStudent);
 router.put("/:companyId", verifyJWT, updateCompanyDetails);

@@ -1,10 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
 import { 
   MdSearch, 
   MdFilterList, 
-  MdEdit, 
-  MdDelete, 
   MdLocationOn,
   MdRefresh,
   MdCheckCircle,
@@ -61,20 +58,14 @@ function CompanyList() {
         setDomainDropdownOpen(false);
     };
 
-  const adminData = {
-    email: "admin@college.edu",
-    fullName: "Placement Officer",
-    role: "Admin"
-  };
-
-  // --- FILTER STATE ---
-  const [filters, setFilters] = useState({
-    search: "",
-    status: "ALL",
-    domain: "ALL",
-    branch: "ALL", // Added Branch Filter
-    city: ""
-  });
+    // --- FILTER STATE ---
+    const [filters, setFilters] = useState({
+        search: "",
+        status: "ALL",
+        domain: "ALL",
+        branch: "ALL", // Added Branch Filter
+        city: ""
+    });
 
     // --- FILTER LOGIC ---
     const filteredCompanies = useMemo(() => {
@@ -94,33 +85,33 @@ function CompanyList() {
         });
     }, [filters, allCompanies]);
 
-  // Calculate Active Filters Count
-  const activeFilterCount = [
-    filters.search !== "",
-    filters.status !== "ALL",
-    filters.domain !== "ALL",
-    filters.branch !== "ALL",
-    filters.city !== ""
-  ].filter(Boolean).length;
+    // Calculate Active Filters Count
+    const activeFilterCount = [
+        filters.search !== "",
+        filters.status !== "ALL",
+        filters.domain !== "ALL",
+        filters.branch !== "ALL",
+        filters.city !== ""
+    ].filter(Boolean).length;
 
-  // --- HANDLERS ---
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
-  };
+    // --- HANDLERS ---
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
+    };
 
-  const clearFilters = () => {
-    setFilters({ search: "", status: "ALL", domain: "ALL", branch: "ALL", city: "" });
-  };
+    const clearFilters = () => {
+        setFilters({ search: "", status: "ALL", domain: "ALL", branch: "ALL", city: "" });
+    };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "OPEN": return <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center gap-1 w-max"><MdCheckCircle /> OPEN</span>;
-      case "PAUSED": return <span className="px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold flex items-center gap-1 w-max"><MdCheck /> PAUSED</span>;
-      case "CLOSED": return <span className="px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold flex items-center gap-1 w-max"><MdCancel /> CLOSED</span>;
-      default: return null;
-    }
-  };
+    const getStatusBadge = (status) => {
+        switch (status) {
+        case "OPEN": return <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center gap-1 w-max"><MdCheckCircle /> OPEN</span>;
+        case "PAUSED": return <span className="px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold flex items-center gap-1 w-max"><MdCheck /> PAUSED</span>;
+        case "CLOSED": return <span className="px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold flex items-center gap-1 w-max"><MdCancel /> CLOSED</span>;
+        default: return null;
+        }
+    };
 
     // ...existing code...
     const [showFilters, setShowFilters] = React.useState(false);
@@ -132,7 +123,7 @@ function CompanyList() {
         {/* Fixed Header Section */}
         <div className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200 z-20">
             <div className="p-0">
-                <HeaderProfile data={adminData} />
+                <HeaderProfile />
             </div>
             
             <div className="mt-8 px-0 md:px-8 pb-2">  
@@ -155,10 +146,10 @@ function CompanyList() {
                     </button>
                 </div>
                 <div
-                    className={`mt-6 bg-gray-50 border border-gray-200 rounded-xl mx-1 p-3 grid grid-cols-1 md:grid-cols-6 gap-3 ${showFilters ? '' : 'hidden'} md:grid`}
+                    className={`mt-6 bg-gray-50 border border-gray-200 rounded-xl mx-1 p-3 grid grid-cols-1 md:grid-cols-7 gap-3 ${showFilters ? '' : 'hidden'} md:grid`}
                 >
                     {/* Search Input */}
-                    <div className="md:col-span-2 relative">
+                    <div className="md:col-span-1 relative">
                         <MdSearch className="absolute left-3 top-2.5 text-gray-400 text-lg" />
                         <input 
                             type="text" 
@@ -170,7 +161,7 @@ function CompanyList() {
                         />
                     </div>
                     {/* Status Filter */}
-                    <div className="relative" ref={statusDropdownRef}>
+                    <div className="relative md:col-span-1" ref={statusDropdownRef}>
                         <button
                             type="button"
                             className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${statusDropdownOpen ? 'border-red-400' : ''}`}
@@ -223,10 +214,10 @@ function CompanyList() {
                         )}
                     </div>
                     {/* Domain Filter */}
-                    <div className="relative" ref={domainDropdownRef}>
+                    <div className="relative md:col-span-2" style={{ minWidth: '180px', maxWidth: '320px' }} ref={domainDropdownRef}>
                         <button
                             type="button"
-                            className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${domainDropdownOpen ? 'border-red-400' : ''}`}
+                            className={`w-full min-w-[180px] max-w-[320px] flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${domainDropdownOpen ? 'border-red-400' : ''}`}
                             onClick={() => {
                                 if (!domainDropdownOpen) {
                                     closeAllDropdowns();
@@ -236,11 +227,16 @@ function CompanyList() {
                                 }
                             }}
                         >
-                            {filters.domain === 'ALL' ? 'Domains' : (allDomains.find(d => d._id === filters.domain)?.name || 'Domains')}
+                            <span
+                                className="block truncate max-w-[240px]"
+                                style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            >
+                                {filters.domain === 'ALL' ? 'Domains' : (allDomains.find(d => d._id === filters.domain)?.name || 'Domains')}
+                            </span>
                             <MdArrowDropDown className="ml-2 text-gray-400" />
                         </button>
                         {domainDropdownOpen && (
-                            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                            <div className="absolute z-20 mt-1 min-w-[180px] max-w-[320px] w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                                 <button
                                     className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.domain === 'ALL' ? 'font-bold text-red-600' : ''}`}
                                     onClick={() => { setFilters(f => ({ ...f, domain: 'ALL' })); setDomainDropdownOpen(false); }}
@@ -260,10 +256,10 @@ function CompanyList() {
                         )}
                     </div>
                     {/* Branch Filter (NEW) */}
-                    <div className="relative" ref={branchDropdownRef}>
+                    <div className="relative md:col-span-2" style={{ minWidth: '180px', maxWidth: '360px' }} ref={branchDropdownRef}>
                         <button
                             type="button"
-                            className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
+                            className={`w-full min-w-[180px] max-w-[360px] flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors ${branchDropdownOpen ? 'border-red-400' : ''}`}
                             onClick={() => {
                                 if (!branchDropdownOpen) {
                                     closeAllDropdowns();
@@ -273,11 +269,16 @@ function CompanyList() {
                                 }
                             }}
                         >
-                            {filters.branch === 'ALL' ? 'Branches' : (allBranches.find(b => b._id === filters.branch)?.name || 'Branches')}
+                            <span
+                                className="block truncate max-w-[240px]"
+                                style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            >
+                                {filters.branch === 'ALL' ? 'Branches' : (allBranches.find(b => b._id === filters.branch)?.name || 'Branches')}
+                            </span>
                             <MdArrowDropDown className="ml-2 text-gray-400" />
                         </button>
                         {branchDropdownOpen && (
-                            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                            <div className="absolute z-20 mt-1 min-w-[180px] max-w-[360px] w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                                 <button
                                     className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.branch === 'ALL' ? 'font-bold text-red-600' : ''}`}
                                     onClick={() => { setFilters(f => ({ ...f, branch: 'ALL' })); setBranchDropdownOpen(false); }}
@@ -297,17 +298,19 @@ function CompanyList() {
                         )}
                     </div>
                     {/* Reset Button with Count */}
-                    <button 
-                        onClick={clearFilters}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-red-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-700 hover:border-red-500 transition-colors relative"
-                    >
-                        <MdRefresh /> Reset
-                        {activeFilterCount > 0 && (
-                            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
-                                {activeFilterCount}
-                            </span>
-                        )}
-                    </button>
+                    <div className="md:col-span-1 flex items-center w-full">
+                        <button 
+                            onClick={clearFilters}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-red-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-700 hover:border-red-500 transition-colors relative w-full"
+                        >
+                            <MdRefresh /> Reset
+                            {activeFilterCount > 0 && (
+                                <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                                    {activeFilterCount}
+                                </span>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -320,21 +323,21 @@ function CompanyList() {
                     </div>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden min-w-[1200px]">
-                    <div className="max-h-[50vh] overflow-y-auto w-full">
+                    <div className="max-h-[53vh] overflow-y-auto w-full">
                         <table className="w-full text-left border-collapse">
                             {/* Sticky Header */}
                             <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm">
                                 <tr>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Company</th>
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
                                     {/* Separated Columns */}
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Technical Domains</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Eligible Branches</th>
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Technical Domains</th>
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Eligible Branches</th>
                                     {/* Updated Seats Header */}
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Filled / Total</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Stipend</th>
-                                    <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                    {/* <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th> */}
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Filled / Total</th>
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Stipend</th>
+                                    <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                                    {/* <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th> */}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -347,12 +350,12 @@ function CompanyList() {
                                         return (
                                         <tr key={company._id} className="hover:bg-red-50/30 transition-colors group">
                                             {/* Company Name */}
-                                            <td className="py-4 px-6 align-top">
+                                            <td className="py-3 px-6 align-top">
                                                 <div className="font-bold text-gray-800 text-sm">{company.name}</div>
                                                 <div className="text-xs text-gray-400 font-mono mt-1">ID: {company._id}</div>
                                             </td>
                                             {/* Location */}
-                                            <td className="py-4 px-6 align-top">
+                                            <td className="py-3 px-6 align-top">
                                                 <div className="flex items-start gap-1.5">
                                                     <MdLocationOn className="text-gray-400 mt-0.5 shrink-0" />
                                                     <div>
@@ -362,7 +365,7 @@ function CompanyList() {
                                                 </div>
                                             </td>
                                             {/* Domains (Separated) */}
-                                            <td className="py-4 px-6 align-top">
+                                            <td className="py-3 px-6 align-top">
                                                 <div className="flex flex-wrap gap-1">
                                                     {company.domainTags.map((d, i) => (
                                                         <span key={i} className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-100 text-[10px] font-semibold rounded-md">
@@ -372,7 +375,7 @@ function CompanyList() {
                                                 </div>
                                             </td>
                                             {/* Branches (Separated) */}
-                                            <td className="py-4 px-6 align-top">
+                                            <td className="py-3 px-6 align-top">
                                                 <div className="flex flex-wrap gap-1">
                                                     {company.allowedBranches.map((b, i) => (
                                                         <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-md border border-gray-200">
@@ -382,7 +385,7 @@ function CompanyList() {
                                                 </div>
                                             </td>
                                             {/* Seats (Filled / Total) */}
-                                            <td className="py-4 px-6 align-top text-center w-32">
+                                            <td className="py-3 px-6 align-top text-center w-32">
                                                 <div className="flex flex-col items-center">
                                                     <div className="text-sm font-medium text-gray-700 mb-1">
                                                         <span className={isFull ? "text-green-600 font-bold" : "text-gray-900 font-bold"}>
@@ -401,18 +404,18 @@ function CompanyList() {
                                                 </div>
                                             </td>
                                             {/* Stipend */}
-                                            <td className="py-4 px-6 align-top">
+                                            <td className="py-3 px-6 align-top">
                                                 <div className="text-sm font-semibold text-gray-700">
                                                     ₹{company.stipendAmount.toLocaleString()}
                                                 </div>
                                                 <div className="text-xs text-gray-400">/ month</div>
                                             </td>
                                             {/* Status */}
-                                            <td className="py-4 px-6 align-top">
+                                            <td className="py-3 px-6 align-top">
                                                 {getStatusBadge(company.recruitmentStatus)}
                                             </td>
                                             {/* Actions */}
-                                            {/* <td className="py-4 px-6 align-top text-right">
+                                            {/* <td className="py-3 px-6 align-top text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
                                                         <MdEdit className="text-lg" />
