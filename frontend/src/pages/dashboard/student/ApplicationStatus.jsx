@@ -39,7 +39,7 @@ function ApplicationStatus(props) {
               )
             ) ? (
               <div className="px-0 md:!px-4">  
-                <Timeline history={currentData.approvalStatusHistory} />
+                <Timeline history={currentData.approvalStatusHistory} profile={profile} />
                 {currentData.approvalStatus === 'REJECTED' && (
                   <div className="max-w-2xl mx-auto border border-red-200 text-red-700 rounded-2xl px-2 gap-6 mt-8 md:mt-16 flex flex-col items-center">
                     <div className="flex items-center justify-center mt-3">

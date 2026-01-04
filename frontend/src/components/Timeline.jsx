@@ -1,6 +1,7 @@
 import React from "react";
+import { studentService } from "../services/studentService";
 
-function Timeline({history}) {
+function Timeline({history, profile}) {
 
   // --- Dynamic status steps logic ---
   const allSteps = [
@@ -12,6 +13,25 @@ function Timeline({history}) {
     "ALLOCATED",
     "REJECTED"
   ];
+
+  // Generate Training Letter PDF via backend template
+  const generateTrainingLetterPDF = async () => {
+    try {
+      const blob = await studentService.downloadTrainingLetter();
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Training_Letter.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error downloading training letter:", error);
+      alert("Failed to download training letter. Please try again.");
+    }
+  };
 
   // Find if ALLOCATED or REJECTED is present in history
   const hasAllocated = history?.some(h => h.status === "ALLOCATED");
@@ -168,15 +188,14 @@ function Timeline({history}) {
             })}
           </div>
         </div>
+
         {/* Download Button: Only show if ALLOCATED is present */}
         {hasAllocated && (
+        
           <div className="flex justify-center ml-4 md:ml-12">
             <button
               className="flex items-center h-9 gap-2 px-4 py-2 bg-red-500 text-white rounded shadow hover:bg-red-700 transition-colors"
-              onClick={() => {
-                // Replace with your download logic
-                alert('Download approval document!');
-              }}
+              onClick={generateTrainingLetterPDF}
             >
               {/* SVG Icon: Document with Download Arrow */}
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">

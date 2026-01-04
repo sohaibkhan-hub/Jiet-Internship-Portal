@@ -16,4 +16,11 @@ export const studentService = {
     const response = await api.post('/companies/update-company', data);
     return response.data.data;
   },
+
+  async downloadTrainingLetter() {
+    const response = await api.get('/students/training-letter', {
+      responseType: 'blob',
+    });
+    return response.data; // Blob (PDF)
+  },
 };

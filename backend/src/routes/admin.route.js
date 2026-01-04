@@ -32,7 +32,6 @@ router.post("/allocate-company", verifyJWT, allocateCompanyToStudent);
 router.post("/reject-application", verifyJWT, rejectStudentApplication);
 router.post("/update-allocated-company",  verifyJWT, updateStudentAllocatedCompany);
 
-
 // router.route("/bulk-register").post( upload.array('students', 1), bulkRegisterStudentsFromTable);
 // router.route("/test-bulk-register").post( upload.array('students', 1), testActualStudentBulk);
 // router.route("/bulk-domain-register").post( upload.array('students', 1), bulkDomainRegistrationFromTable);

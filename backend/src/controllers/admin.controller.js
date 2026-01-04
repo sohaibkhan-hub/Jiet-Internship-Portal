@@ -288,7 +288,10 @@ const getAllStudents = asyncHandler(async (req, res) => {
 
   const students = await Student.find(filter)
     .populate("branch", "name code programType")
-    .populate("user", "email")
+    .populate({
+      path: "user",
+      select: "email +tempPassword",
+    })
     .populate("internshipData.allocatedCompany", "name")
     .sort({ fullName: 1 });
 
@@ -1252,6 +1255,51 @@ const getTestStudentProfile = asyncHandler(async (req, res) => {
     );
 });
 
+// Download Student Temporary password Excel
+const downloadStudentTempPassword = asyncHandler(async (req, res) => {
+  // Aggregate students with user info, sort by registrationNumber
+  const students = await Student.aggregate([
+    {
+      $lookup: {
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "userInfo"
+      }
+    },
+    { $unwind: "$userInfo" },
+    { $sort: { registrationNumber: 1 } }
+  ]);
+
+  if (!students || students.length === 0) {
+    throw new ApiError(404, "No students found");
+  }
+
+  // Prepare data for Excel
+  const data = students.map(student => ({
+    "Name": student.fullName,
+    "Registration Number": student.registrationNumber || "",
+    "Roll Number": student.rollNumber || "",
+    "Branch": student.branch ? student.branch.toString() : "",
+    "Year": student.year || "",
+    "Email": student.email || "",
+    "Temporary Password": student.userInfo.tempPassword || "N/A"
+  }));
+
+  // Create worksheet and workbook
+  const worksheet = xlsx.utils.json_to_sheet(data);
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Students");
+
+  // Write to buffer
+  const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  // Set headers and send file
+  res.setHeader("Content-Disposition", "attachment; filename=student_temp_passwords.xlsx");
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return res.status(200).send(buffer);
+});
+
 export {
   registerStudent,
   registerFaculty,
@@ -1268,4 +1316,6 @@ export {
   testActualStudentBulk,
   bulkDomainRegistrationFromTable,
   manualDomainStudentRegistration,
+  downloadStudentTempPassword
+  
 };

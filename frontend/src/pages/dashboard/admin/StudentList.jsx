@@ -335,6 +335,7 @@ function StudentList() {
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Father Name</th>
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">DOB</th>
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">TEMP PASSWORD</th>
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone No.</th>
                                             {/* Action column removed */}
                                         </tr>
@@ -350,6 +351,7 @@ function StudentList() {
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.branch.code}</td>
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.fatherName}</td>
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.dateOfBirth}</td>
+                                                    <td className="py-3 px-6 align-top text-sm text-gray-700">{app.user.tempPassword}</td>
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.phoneNumber}</td>
                                                     {/* Action column removed */}
                                                 </tr>

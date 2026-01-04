@@ -8,6 +8,7 @@ import {
 	getApplicationStatus,
 	updateStudentDomain,
 	getAllCompaniesWithDomains,
+	generateTrainingLetterPdf,
 } from "../controllers/student.controller.js";
 
 const router = Router();
@@ -19,5 +20,6 @@ router.put("/survey", verifyJWT, updateSurveyPreferences);
 router.post("/submit-choices", verifyJWT, submitInternshipChoices);
 router.get("/application-status", verifyJWT, getApplicationStatus);
 router.put("/update-domain", verifyJWT, updateStudentDomain);
+router.get("/training-letter", verifyJWT, generateTrainingLetterPdf);
 
 export default router;

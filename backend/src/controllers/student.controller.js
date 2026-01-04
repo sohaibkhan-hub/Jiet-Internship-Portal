@@ -5,6 +5,9 @@ import { Student } from "../models/student.model.js";
 import { User } from "../models/user.model.js";
 import { Domain } from "../models/domain.model.js";
 import { Company } from "../models/company.model.js";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import fs from "fs";
+import path from "path";
 
 
 // Get Student Profile
@@ -386,6 +389,103 @@ const getAllCompaniesWithDomains = asyncHandler(async (req, res) => {
   );
 });
 
+// Generate Training Letter PDF from official template
+const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user || user.role !== "STUDENT") {
+    throw new ApiError(403, "Not a student user");
+  }
+
+  const student = await Student.findOne({ user: userId }).populate(
+    "branch",
+    "name code programType"
+  );
+
+  if (!student) {
+    throw new ApiError(404, "Student profile not found");
+  }
+
+  // Paths to official templates (PDF preferred)
+  const templatePdfPath = path.join(
+    process.cwd(),
+    "public",
+    "temp",
+    "Training Letter.pdf"
+  );
+
+  if (!fs.existsSync(templatePdfPath)) {
+    throw new ApiError(500, "Training letter template not found on server");
+  }
+
+  const existingPdfBytes = fs.readFileSync(templatePdfPath);
+  const pdfDoc = await PDFDocument.load(existingPdfBytes);
+  const pages = pdfDoc.getPages();
+  const firstPage = pages[0];
+  const { width, height } = firstPage.getSize();
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontSize = 10;
+
+  // Helper to draw text
+  const drawText = (text, x, y) => {
+    firstPage.drawText(text ?? "", {
+      x,
+      y,
+      size: fontSize,
+      font,
+    });
+  };
+
+  // Map student fields to template fields
+  const branchName = student.branch?.name || "";
+  const name = student.fullName || "";
+  const courseYear = `${student.branch?.name || ""} / Year ${student.year || ""}`;
+  const rollNo = student.rollNumber || "";
+  const email = student.email || user.email || "";
+  const contactNo = student.phoneNumber || "";
+
+  // NOTE: X/Y coordinates must be aligned with the blanks
+  // on your official Training Letter.pdf. Adjust these values
+  // once by testing until text sits exactly in the right place.
+  // Coordinates below are placeholders for A4 portrait.
+
+  // Example positions (from left-bottom origin):
+  // Branch Name : ______________________
+  drawText(branchName, 160, height - 397);
+  
+  // Name of Student : ______________________
+  drawText(name, 250, height - 431);
+
+  // Course/Year : ______________________
+  drawText(courseYear, 250, height - 443);
+
+  // Roll.No. : ______________________
+  drawText(rollNo, 250, height - 458);
+
+  // Email : ______________________
+  drawText(email, 250, height - 471);
+
+  // Contact No. : ______________________
+  drawText(contactNo, 250, height - 484);
+
+  const pdfBytes = await pdfDoc.save();
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    "attachment; filename=Training_Letter.pdf"
+  );
+  return res.status(200).send(Buffer.from(pdfBytes));
+});
+
+
 export {
   getStudentProfile,
   updateStudentProfile,
@@ -394,4 +494,5 @@ export {
   getApplicationStatus,
   updateStudentDomain,
   getAllCompaniesWithDomains,
+  generateTrainingLetterPdf,
 };

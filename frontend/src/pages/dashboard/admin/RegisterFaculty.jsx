@@ -146,7 +146,7 @@ function RegisterFaculty() {
                                         value={formData.fullName}
                                         onChange={handleInputChange}
                                         className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#EF5350] bg-gray-50"
-                                        placeholder="e.g. Student Name"
+                                        placeholder="e.g. Faculty Name"
                                     />
                                 </div>
                                 {/* Phone Number */}
@@ -295,7 +295,7 @@ function RegisterFaculty() {
                                 className="px-6 py-2.5 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 shadow-sm hover:shadow-md transition-all flex items-center gap-2"
                             >
                                 <MdSave className="text-lg" />
-                                Register Student
+                                Register Faculty
                             </button>
                         </div>
                         </form>
