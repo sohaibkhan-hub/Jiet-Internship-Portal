@@ -403,10 +403,9 @@ const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Not a student user");
   }
 
-  const student = await Student.findOne({ user: userId }).populate(
-    "branch",
-    "name code programType"
-  );
+  const student = await Student.findOne({ user: userId })
+    .populate("branch", "name code programType")
+    .populate("internshipData.allocatedCompany", "name location");
 
   if (!student) {
     throw new ApiError(404, "Student profile not found");
@@ -431,9 +430,10 @@ const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
   const { width, height } = firstPage.getSize();
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontSize = 10;
 
-  // Helper to draw text
+  // Helper to draw normal text
   const drawText = (text, x, y) => {
     firstPage.drawText(text ?? "", {
       x,
@@ -442,8 +442,8 @@ const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
       font,
     });
   };
-
   // Map student fields to template fields
+  const allocatedCompany = student.internshipData.allocatedCompany?.name || "";
   const branchName = student.branch?.name || "";
   const name = student.fullName || "";
   const courseYear = `${student.branch?.name || ""} / Year ${student.year || ""}`;
@@ -455,10 +455,23 @@ const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
   // on your official Training Letter.pdf. Adjust these values
   // once by testing until text sits exactly in the right place.
   // Coordinates below are placeholders for A4 portrait.
-
   // Example positions (from left-bottom origin):
+  // Allocated Name : ______________________ (bold)
+  firstPage.drawText(allocatedCompany ?? "", {
+    x: 100,
+    y: height - 382,
+    size: fontSize,
+    font: boldFont,
+  });
+
   // Branch Name : ______________________
-  drawText(branchName, 160, height - 397);
+    firstPage.drawText(branchName ?? "", {
+    x: 186,
+    y: height - 397,
+    size: fontSize,
+    font: boldFont,
+  });
+  // drawText(branchName, 186, height - 397);
   
   // Name of Student : ______________________
   drawText(name, 250, height - 431);
