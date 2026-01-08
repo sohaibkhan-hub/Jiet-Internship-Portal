@@ -93,8 +93,8 @@ const companySchema = new mongoose.Schema(
       default: "Monthly",
     },
     stipendAmount: {
-      type: Number,
-      default: 0,
+      type: String,
+      default: "N/A",
     },
 
     // Job Description/Requirements

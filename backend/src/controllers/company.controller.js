@@ -17,13 +17,13 @@ const addCompany = asyncHandler(async (req, res) => {
     stipendAmount,
   } = req.body;
 
-  if (!(req.user.role !== "ADMIN" || req.user.role !== "FACULTY")) {
+  if (req.user.role !== "ADMIN" && req.user.role !== "FACULTY") {
     throw new ApiError(403, "Only faculty and admin can add companies");
   }
-
+  
   // Validate required fields
-  if (!name || !totalSeats || !stipendAmount) {
-    throw new ApiError(400, "Company name, total seats, duration, and stipend amount are required");
+  if (!name || !totalSeats) {
+    throw new ApiError(400, "Company name and total seats are required");
   }
 
   if (!domainTags.length === 0) {
@@ -54,7 +54,7 @@ const addCompany = asyncHandler(async (req, res) => {
     domainTags: domainTags || [],
     allowedBranches: allowedBranches || [],
     totalSeats,
-    stipendAmount: stipendAmount || 0,
+    stipendAmount: stipendAmount || 'N/A',
     isActive: true,
     recruitmentStatus: "OPEN",
   });

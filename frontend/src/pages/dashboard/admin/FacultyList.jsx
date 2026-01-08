@@ -245,6 +245,7 @@ function FacultyList() {
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Branch</th>
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone Number</th>
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
+                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Temp Password</th>
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Designation</th>
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Program Type</th>
                                         </tr>
@@ -260,6 +261,7 @@ function FacultyList() {
                                                     </td>
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.phoneNumber}</td>
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.role}</td>
+                                                    <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.user?.tempPassword || 'N/A'}</td>
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.designation}</td>
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.branch?.programType || ''}</td>
                                                 </tr>

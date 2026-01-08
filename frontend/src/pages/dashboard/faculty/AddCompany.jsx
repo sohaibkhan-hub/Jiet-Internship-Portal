@@ -127,7 +127,7 @@ function AddCompany() {
     // 5. Submit
     const handleSubmit = async () => {
         // Basic Validation
-        if (!formData.name || !formData.totalSeats || !formData.stipendAmount) {
+        if (!formData.name || !formData.totalSeats) {
             setErrors({ general: "Please fill in all required fields." });
             return;
         }
@@ -150,7 +150,7 @@ function AddCompany() {
             domainTags: formData.domainTags, // already array of IDs
             allowedBranches: formData.allowedBranches, // already array of IDs
             totalSeats: Number(formData.totalSeats),
-            stipendAmount: Number(formData.stipendAmount)
+            stipendAmount: formData.stipendAmount || "N/A"
         };
 
         try {
@@ -284,15 +284,14 @@ function AddCompany() {
                         <div>
                             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Stipend Amount (₹)</label>
                             <div className="relative">
-                                <MdAttachMoney className="absolute left-3 top-3 text-gray-400" />
+                                {/* <MdAttachMoney className="absolute left-3 top-3 text-gray-400" /> */}
                                 <input 
-                                    type="number" 
+                                    type="text" 
                                     name="stipendAmount"
-                                    required
                                     value={formData.stipendAmount}
                                     onChange={handleInputChange}
-                                    className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all"
-                                    placeholder="e.g. 25000"
+                                    className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 pl-4 pr-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all"
+                                    placeholder="e.g. ₹25000, Performance Based, N/A"
                                 />
                             </div>
                         </div>

@@ -325,7 +325,10 @@ const getAllFaculties = asyncHandler(async (req, res) => {
 
   const faculties = await Faculty.find()
     .populate("branch", "name code programType")
-    .populate("user", "email role")
+    .populate({
+      path: "user",
+      select: "email +tempPassword role",
+    })
     .sort({ fullName: 1 });
 
   if (!faculties || faculties.length === 0) {
