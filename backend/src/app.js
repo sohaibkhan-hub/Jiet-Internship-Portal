@@ -75,7 +75,7 @@ app.use("/api/v1/branch-domain", branchDomainRouter);
 app.use("/api/v1/companies", companyRouter);
 app.use("/api/v1/tpo", tpoRouter);
 app.use("/api/v1/active", (req, res) => {
-  res.send({ status: "active1" });
+  res.send({ status: "active2" });
 });
 
 app.use(express.static(path.join(__dirname, "frontend/dist")));
