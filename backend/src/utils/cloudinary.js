@@ -22,9 +22,6 @@ const uploadOnCloudinary = async (localFilePath) => {
       folder: "college_internship_system",
     });
 
-    console.log("response", response);
-    
-
     fs.unlinkSync(localFilePath); // Clean up local file
     return response;
 

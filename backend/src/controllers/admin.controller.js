@@ -10,6 +10,7 @@ import { FeatureSettings } from "../models/featureSettings.model.js";
 import xlsx from "xlsx";
 import { Faculty } from "../models/faculty.model.js";
 import mongoose from "mongoose";
+import fs from "fs";
 
 // Utility: Generate 6-digit temporary password
 function generateTempPassword() {
@@ -21,6 +22,17 @@ function cleanValue(val) {
   if (val === undefined || val === null) return "";
   if (typeof val === "string" && ["--", "NULL", "null", "0000-00-00", ""].includes(val.trim())) return "";
   return val;
+}
+
+// Normalize Excel row keys by trimming whitespace
+function normalizeRowKeys(row) {
+  if (!row || typeof row !== "object") return row;
+  const normalized = {};
+  Object.keys(row).forEach((k) => {
+    const nk = typeof k === "string" ? k.trim() : k;
+    normalized[nk] = row[k];
+  });
+  return normalized;
 }
 
 // Register Single Student
@@ -1257,18 +1269,18 @@ const updateFeatureSettings = asyncHandler(async (req, res) => {
 });
 
 
-
-
-
 // Bulk Student registration from table (Excel upload)
 const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
   // If file is uploaded, parse Excel file
   let students = [];
+  let uploadedFilePath = null;
   if (req.files && req.files.length > 0) {
     const file = req.files[0];
+    uploadedFilePath = file.path;
     const workbook = xlsx.readFile(file.path);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
+    
     students = xlsx.utils.sheet_to_json(worksheet);
   } else if (req.body.students) {
     // Fallback: if students array is sent as JSON
@@ -1288,7 +1300,8 @@ const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
 
   const results = [];
   for (let i = 0; i < students.length; i++) {
-    const row = students[i];
+    const row = normalizeRowKeys(students[i]);
+
     let newUser = null;
     let newStudent = null;
     try {
@@ -1338,6 +1351,7 @@ const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
       const branchId = cleanValue(row.branch_id); // external branch id from excel
       const collegeId = cleanValue(row.colg); // external college id from excel
       const year = parseInt(cleanValue(row.studentYr)); // year from excel
+
       if (Number.isNaN(year)) {
         results.push({ row: i + 1, status: "error", error: "Invalid year" });
         continue;
@@ -1433,6 +1447,9 @@ const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
 
   // Only return failed/skipped students (status: "error" or "skipped")
   const failed = results.filter(r => r.status === "error" || r.status === "skipped");
+  if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+    try { fs.unlinkSync(uploadedFilePath); } catch (e) {}
+  }
   if (failed.length > 0) {
     const worksheet = xlsx.utils.json_to_sheet(failed);
     const workbook = xlsx.utils.book_new();
