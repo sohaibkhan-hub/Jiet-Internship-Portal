@@ -17,9 +17,11 @@ function App() {
   const { user, isAuthenticated, role, loading: authLoading } = useAppSelector((state) => state.auth);
   const { loading: companyLoading } = useAppSelector((state) => state.company);
   const { loading: branchDomainLoading } = useAppSelector((state) => state.domainBranch);
+  const { loading: adminLoading } = useAppSelector((state) => state.admin);
+  const { loading: studentLoading } = useAppSelector((state) => state.student);
 
   // Show loader if any loading state is true
-  const isLoading = authLoading || companyLoading || branchDomainLoading;
+  const isLoading = authLoading || companyLoading || branchDomainLoading || adminLoading || studentLoading;
   
   // On app load, check if user is authenticated
   useEffect(() => {

@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { MdSearch, MdFilterList, MdRefresh, MdArrowDropDown } from "react-icons/md";
+import { MdSearch, MdFilterList, MdRefresh, MdArrowDropDown, MdAdd, MdDelete } from "react-icons/md";
 import HeaderProfile from "../../../components/HeaderProfile";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
-import { getAllStudentDetailsAsync } from "../../../store/slices/adminSlice";
+import { deleteStudentAsync, getAllStudentDetailsAsync } from "../../../store/slices/adminSlice";
 import { getAllBranchesAsync, getAllDomainsAsync } from "../../../store/slices/branchDomainSlice";
 import Loader from "../../../components/Loader";
+import RegisterStudentModel from "./component-model/RegisterStudentModel";
+import DeleteModel from "./component-model/DeleteModel";
+import { toast } from "react-toastify";
 
 function StudentList() {
     // Dropdown open state for custom filters
@@ -13,6 +16,9 @@ function StudentList() {
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
+    const [showAddStudent, setShowAddStudent] = useState(false);
+    const [showDeleteStudent, setShowDeleteStudent] = useState(false);
+    const [studentToDelete, setStudentToDelete] = useState(null);
     const branchDropdownRef = useRef(null);
     const statusDropdownRef = useRef(null);
     const domainDropdownRef = useRef(null);
@@ -97,11 +103,6 @@ function StudentList() {
         return Array.from(set);
     }, [STUDENT_APPLICATIONS]);
 
-    // Use allDomains from API for domain filter
-    const uniqueDomains = useMemo(() => {
-        return allDomains.map(domain => domain.name);
-    }, [allDomains]);
-
   // Calculate Active Filters Count
     const activeFilterCount = [
         filters.search !== "",
@@ -160,7 +161,7 @@ function StudentList() {
                             className={`mt-6 bg-gray-50 border border-gray-200 rounded-xl mx-1 p-3 grid grid-cols-1 md:grid-cols-7 gap-3 ${showFilters ? '' : 'hidden'} md:grid`}
                         >
                             {/* Search Input */}
-                            <div className="md:col-span-1 relative">
+                            <div className="md:col-span-2 relative">
                                 <MdSearch className="absolute left-3 top-2.5 text-gray-400 text-lg" />
                                 <input 
                                     type="text" 
@@ -208,48 +209,6 @@ function StudentList() {
                                                 onClick={() => { setFilters(f => ({ ...f, year: year })); setStatusDropdownOpen(false); }}
                                             >
                                                 {year}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            {/* Domain Filter */}
-                            <div className="relative md:col-span-2" ref={domainDropdownRef}>
-                                <button
-                                    type="button"
-                                    className={`w-full flex items-center justify-between px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-red-400 focus:outline-none focus:border-red-500 transition-colors`}
-                                    onClick={() => {
-                                        if (!domainDropdownOpen) {
-                                            closeAllDropdowns();
-                                            setDomainDropdownOpen(true);
-                                        } else {
-                                            setDomainDropdownOpen(false);
-                                        }
-                                    }}
-                                >
-                                    <span
-                                        className="block truncate max-w-[240px]"
-                                        style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                                    >
-                                        {filters.domain === 'ALL' ? 'Domains' : filters.domain}
-                                    </span>
-                                    <MdArrowDropDown className="ml-2 text-gray-400" />
-                                </button>
-                                {domainDropdownOpen && (
-                                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                                        <button
-                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.domain === 'ALL' ? 'font-bold text-red-600' : ''}`}
-                                            onClick={() => { setFilters(f => ({ ...f, domain: 'ALL' })); setDomainDropdownOpen(false); }}
-                                        >
-                                            Domains
-                                        </button>
-                                        {uniqueDomains.map((d) => (
-                                            <button
-                                                key={d}
-                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${filters.domain === d ? 'font-bold text-red-600' : ''}`}
-                                                onClick={() => { setFilters(f => ({ ...f, domain: d })); setDomainDropdownOpen(false); }}
-                                            >
-                                                {d}
                                             </button>
                                         ))}
                                     </div>
@@ -311,6 +270,15 @@ function StudentList() {
                                     )}
                                 </button>
                             </div>
+                            <div className="md:col-span-1 flex items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddStudent(true)}
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 border border-red-300 rounded-lg text-sm font-medium text-white hover:bg-red-600 hover:border-red-500 transition-colors relative"
+                                >
+                                    <MdAdd className="h-6 w-6" /> Student
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -337,7 +305,7 @@ function StudentList() {
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">DOB</th>
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">TEMP PASSWORD</th>
                                             <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Phone No.</th>
-                                            {/* Action column removed */}
+                                            <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -353,12 +321,25 @@ function StudentList() {
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.dateOfBirth}</td>
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.user.tempPassword}</td>
                                                     <td className="py-3 px-6 align-top text-sm text-gray-700">{app.phoneNumber}</td>
-                                                    {/* Action column removed */}
+                                                    <td className="py-3 px-6 align-top text-right">
+                                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                                title="Delete"
+                                                                onClick={() => {
+                                                                    setStudentToDelete(app);
+                                                                    setShowDeleteStudent(true);
+                                                                }}
+                                                            >
+                                                                <MdDelete className="text-lg" />
+                                                            </button>
+                                                        </div>
+                                                    </td>   
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan="9" className="py-12 text-center text-gray-400">
+                                                <td colSpan="10" className="py-12 text-center text-gray-400">
                                                     <div className="flex flex-col items-center justify-center">
                                                         <MdFilterList className="text-4xl mb-2 text-gray-300" />
                                                         <p>No student applications found matching your filters.</p>
@@ -374,6 +355,34 @@ function StudentList() {
                     </div>
                 </div>
             </section>
+            {showAddStudent && (
+                <RegisterStudentModel
+                    isModal
+                    onClose={() => setShowAddStudent(false)}
+                />
+            )}
+            <DeleteModel
+                open={showDeleteStudent && !!studentToDelete}
+                onClose={() => {
+                    setShowDeleteStudent(false);
+                    setStudentToDelete(null);
+                }}
+                onConfirm={async () => {
+                    try {
+                        await dispatch(deleteStudentAsync(studentToDelete._id)).unwrap();
+                        toast.success("Student deleted successfully");
+                    } catch (err) {
+                        toast.error(typeof err === "string" ? err : err?.message || "Failed to delete student");
+                    } finally {
+                        setShowDeleteStudent(false);
+                        setStudentToDelete(null);
+                    }
+                }}
+                title="Delete Student"
+                message={studentToDelete ? `Are you sure you want to delete <span class='font-bold text-red-600'>${studentToDelete.fullName}</span>? This will also remove the linked user and de-allocate any company seat.` : ""}
+                confirmText="Delete"
+                cancelText="Cancel"
+            />
         </div>
     );
 }

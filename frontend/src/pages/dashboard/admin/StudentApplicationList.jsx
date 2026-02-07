@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { MdSearch, MdFilterList, MdRefresh, MdArrowDropDown } from "react-icons/md";
+import { MdSearch, MdFilterList, MdRefresh, MdArrowDropDown, MdFileDownload } from "react-icons/md";
 import HeaderProfile from "../../../components/HeaderProfile";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
 import { getAllBranchesAsync, getAllDomainsAsync } from "../../../store/slices/branchDomainSlice";
-import { getAllStudentApplicationDetailsAsync, allocateCompanyAsync, rejectApplicationAsync } from "../../../store/slices/adminSlice";
+import { getAllCompaniesAsync } from "../../../store/slices/companySlice";
+import { getAllStudentApplicationDetailsAsync, allocateCompanyAsync, rejectApplicationAsync, downloadCompanyStudentsAsync, downloadAllCompanyStudentsAsync, setAdminLoading } from "../../../store/slices/adminSlice";
 import { toast } from "react-toastify";
+import { adminService } from "../../../services/adminService";
+import { studentService } from "../../../services/studentService";
 
   // Collapse/expand for preferred domains (moved outside table/component)
 function PreferredDomainsCollapse({ domains }) {
@@ -49,11 +52,20 @@ function PreferredDomainsCollapse({ domains }) {
 function StudentApplicationList() {
     const [rejectPopup, setRejectPopup] = useState({ open: false, appId: null });
     const [rejectReason, setRejectReason] = useState("");
+    const [approvePopup, setApprovePopup] = useState({ open: false, app: null, companyId: "" });
+    const [confirmApprovePopup, setConfirmApprovePopup] = useState({ open: false, app: null, companyId: "" });
     // Dropdown open state for custom filters
     const [showFilters, setShowFilters] = React.useState(false);
     const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
+    const [downloadPopupOpen, setDownloadPopupOpen] = useState(false);
+    const [companySearch, setCompanySearch] = useState("");
+    const [selectedCompanyId, setSelectedCompanyId] = useState("");
+    const [downloadType, setDownloadType] = useState("all");
+    const [downloadMode, setDownloadMode] = useState("company");
+    const [allDownloadType, setAllDownloadType] = useState("alloted");
+    const [downloading, setDownloading] = useState(false);
     // --- Dropdown outside click using refs ---
     const branchDropdownRef = React.useRef(null);
     const statusDropdownRef = React.useRef(null);
@@ -62,12 +74,14 @@ function StudentApplicationList() {
     const [loadingActions, setLoadingActions] = useState({});
     const allStudentApplicationDetails = useAppSelector((state) => state.admin.allStudentApplicationDetails || {});
     const { allDomains = [], allBranches = [] } = useAppSelector((state) => state.domainBranch || {});
+    const allCompanies = useAppSelector((state) => state.company.allCompanies || []);
     const dispatch = useAppDispatch();
 
     useEffect(() => {
         dispatch(getAllStudentApplicationDetailsAsync());
         dispatch(getAllDomainsAsync());
         dispatch(getAllBranchesAsync());
+        dispatch(getAllCompaniesAsync());
     }, [dispatch]);
 
     // Helper to close all dropdowns
@@ -115,9 +129,11 @@ function StudentApplicationList() {
             choices: Array.isArray(item.internshipData?.choices)
                 ? item.internshipData.choices.map(choice => ({
                     company: choice.company?.name || "-",
+                    companyId: choice.company?._id || null,
                     domain: choice.domain?.name || "-",
                     location: choice.location || "-",
-                    priority: choice.priority
+                    priority: choice.priority,
+                    resume: choice.resume || ""
                 }))
                 : [],
             status: item.internshipData?.approvalStatus || "PENDING",
@@ -172,7 +188,116 @@ function StudentApplicationList() {
         setFilters({ search: "", approvalStatus: "ALL", domain: "ALL", branch: "ALL", city: "" });
     };
 
-    const handleApprovedApplication = async (studentId) => {
+    const filteredCompanies = useMemo(() => {
+        const q = companySearch.trim().toLowerCase();
+        if (!q) return allCompanies;
+        return allCompanies.filter((c) => (c?.name || "").toLowerCase().includes(q));
+    }, [allCompanies, companySearch]);
+
+    const handleDownloadCompanyList = async () => {
+        if (!selectedCompanyId) {
+            toast.error("Please select a company");
+            return;
+        }
+        try {
+            setDownloading(true);
+            const blob = await dispatch(
+                downloadCompanyStudentsAsync({ companyId: selectedCompanyId, type: downloadType })
+            ).unwrap();
+            if (blob && blob.type && blob.type.includes("application/json")) {
+                const text = await blob.text();
+                let message = "Failed to download file";
+                try {
+                    const json = JSON.parse(text);
+                    message = json?.message || message;
+                } catch {
+                    message = text || message;
+                }
+                throw new Error(message);
+            }
+            const selectedCompany = allCompanies.find((c) => c._id === selectedCompanyId);
+            const safeName = (selectedCompany?.name || "company")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+            const typeSuffix = downloadType === "all" ? "all" : downloadType;
+            const filename = `${safeName || "company"}_${typeSuffix}_students.xlsx`;
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute("download", filename);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.success("Excel file downloaded");
+            setDownloadPopupOpen(false);
+        } catch (err) {
+            toast.error(typeof err === "string" ? err : err?.message || "Failed to download file");
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const handleDownloadAllCompanyList = async () => {
+        try {
+            setDownloading(true);
+            const blob = await dispatch(downloadAllCompanyStudentsAsync({ type: allDownloadType })).unwrap();
+            if (blob && blob.type && blob.type.includes("application/json")) {
+                const text = await blob.text();
+                let message = "Failed to download file";
+                try {
+                    const json = JSON.parse(text);
+                    message = json?.message || message;
+                } catch {
+                    message = text || message;
+                }
+                throw new Error(message);
+            }
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute(
+                "download",
+                `all_company_${allDownloadType === "alloted" ? "alloted" : "unalloted"}_students.xlsx`
+            );
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.success("Excel file downloaded");
+            setDownloadPopupOpen(false);
+        } catch (err) {
+            toast.error(typeof err === "string" ? err : err?.message || "Failed to download file");
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const handleGenerateTrainingLetter = async (studentId, studentName) => {
+        try {
+            dispatch(setAdminLoading(true));
+            const blob = await studentService.downloadTrainingLetter(studentId);
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement("a");
+            link.href = url;
+            const safeName = (studentName || "student")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+            link.setAttribute("download", `${safeName}_training_letter.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            toast.error(typeof err === "string" ? err : err?.message || "Failed to download training letter");
+        } finally {
+            dispatch(setAdminLoading(false));
+        }
+    };
+
+    const handleApprovedApplication = async (studentId, companyId) => {
         try {
             setLoadingActions(prev => ({ ...prev, [studentId]: true }));
             
@@ -185,8 +310,12 @@ function StudentApplicationList() {
                 toast.error("Student ID is missing");
                 return;
             }
+            if(!companyId){
+                toast.error("Company is missing");
+                return;
+            }
             // Call API
-            const response = await dispatch(allocateCompanyAsync({ studentId })).unwrap();
+            const response = await dispatch(allocateCompanyAsync({ studentId, companyId })).unwrap();
             
             if (response.success === true || response.statusCode === 200) {
                 await dispatch(getAllStudentApplicationDetailsAsync());
@@ -404,7 +533,7 @@ function StudentApplicationList() {
                             )}
                         </div>
                         {/* Reset Button with Count */}
-                        <div className="flex items-center md:ml-2 relative">
+                        <div className="flex items-center gap-4 md:ml-2 relative">
                             <button 
                                 onClick={clearFilters}
                                 className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-red-300 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-700 hover:border-red-500 transition-colors relative"
@@ -415,6 +544,20 @@ function StudentApplicationList() {
                                         {activeFilterCount}
                                     </span>
                                 )}
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    setCompanySearch("");
+                                    setSelectedCompanyId("");
+                                    setDownloadType("all");
+                                    setDownloadMode("company");
+                                    setAllDownloadType("alloted");
+                                    setDownloadPopupOpen(true);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 border border-red-300 rounded-lg text-sm font-medium text-white hover:bg-red-600 hover:border-red-500 transition-colors relative"
+                            >
+                                <MdFileDownload className="h-6 w-6" /> List
                             </button>
                         </div>
                     </div>
@@ -444,17 +587,18 @@ function StudentApplicationList() {
                                         <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Approval Status</th>
                                         <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Preferred Domains</th>
                                         <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Action</th>
+                                        <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Download</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredApplications.length > 0 ? (
                                         filteredApplications.map((app) => (
-                                            <tr key={app._id} className="hover:bg-red-50/30 transition-colors group">
+                                            <tr key={app._id} className={`transition-colors group ${app.allocatedCompany ? "bg-green-50/150 hover:bg-green-50/80" : "hover:bg-red-50/30"}`}>
                                                 <td className="py-2 px-3 align-center font-bold text-gray-800 text-sm min-w-[160px]">{app.student.name}</td>
                                                 <td className="py-2 px-3 align-center text-sm text-gray-700">{app.student.roll}</td>
                                                 <td className="py-2 px-3 align-center text-sm text-gray-700">{app.student.branch}</td>
                                                 {app.choices.map((choice, idx) => (
-                                                    <td key={idx} className="py-2 px-3 text-sm min-w-[200px]">
+                                                    <td key={idx} className={`py-2 px-3 text-sm min-w-[220px] ${app.allocatedCompany && app.allocatedCompany === choice.company ? "bg-green-100/60" : ""}`}>
                                                         <div className="font-semibold text-gray-700 whitespace-normal break-words text-center">{choice.company}</div>
                                                         <div className="flex flex-wrap gap-1 mt-1 justify-center">
                                                             {Array.isArray(choice.domain)
@@ -468,6 +612,22 @@ function StudentApplicationList() {
                                                                         {choice.domain}
                                                                     </span>
                                                                 )}
+                                                        </div>
+                                                        <div className="text-[10px] mt-1 text-center">
+                                                            {choice.resume ? (
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <a
+                                                                        href={choice.resume}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className="text-blue-600 hover:underline"
+                                                                    >
+                                                                        View
+                                                                    </a>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-gray-400">No resume</span>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 ))}
@@ -528,7 +688,15 @@ function StudentApplicationList() {
                                                                             )}
                                                                         </button>
                                                                         <button
-                                                                            onClick={() => handleApprovedApplication(app._id)}
+                                                                            onClick={() => {
+                                                                                const choiceCompanies = Array.isArray(app.choices) ? app.choices : [];
+                                                                                const selectable = choiceCompanies.filter(c => c.companyId);
+                                                                                if (!selectable.length) {
+                                                                                    toast.error("No valid company choices found for this student.");
+                                                                                    return;
+                                                                                }
+                                                                                setApprovePopup({ open: true, app, companyId: "" });
+                                                                            }}
                                                                             className="flex items-center !rounded-xl gap-1 px-2.5 bg-green-200 text-black rounded-md font-semibold !text-xs hover:bg-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                                             disabled={loadingActions[app._id]}
                                                                         >
@@ -546,6 +714,22 @@ function StudentApplicationList() {
                                                         })()}
                                                     </div>
                                                 </td>
+                                                <td className="py-2 px-3 align-center text-right">
+                                                    <button
+                                                        className={`flex items-center h-9 gap-2 px-1 py-2 rounded shadow transition-colors ${
+                                                            app.allocatedCompany ? "bg-red-500 text-white hover:bg-red-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                                        }`}
+                                                        onClick={() => app.allocatedCompany && handleGenerateTrainingLetter(app._id, app.student.name)}
+                                                        disabled={!app.allocatedCompany}
+                                                    >
+                                                        {/* SVG Icon: Document with Download Arrow */}
+                                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-8m0 8l-3-3m3 3l3-3M6 20.25h12a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v12a2.25 2.25 0 002.25 2.25z" />
+                                                        </svg>
+                                                        Generate
+                                                    </button>
+                                                </td>
+
                                             </tr>
                                         ))
                                     ) : (
@@ -565,6 +749,95 @@ function StudentApplicationList() {
                 </div>
             </div>
         </section>
+
+
+
+
+
+        
+        {/* Approve Choice Popup */}
+        {approvePopup.open && approvePopup.app && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-md w-full text-center">
+                    <div className="text-lg font-semibold text-gray-800 mb-2">Select Company</div>
+                    <div className="text-gray-500 text-sm mb-4">Choose one of the student's 4 preferences.</div>
+                    <div className="mb-4">
+                        <select
+                            className="w-full border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-green-200 text-gray-700"
+                            value={approvePopup.companyId}
+                            onChange={(e) => setApprovePopup(prev => ({ ...prev, companyId: e.target.value }))}
+                        >
+                            <option value="">Select company...</option>
+                            {approvePopup.app.choices.filter(c => c.companyId).map((c, idx) => (
+                                <option key={`${approvePopup.app._id}-${idx}`} value={c.companyId}>
+                                    {c.company}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex justify-center gap-4">
+                        <button
+                            className="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                            onClick={() => setApprovePopup({ open: false, app: null, companyId: "" })}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="px-5 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 shadow-sm transition-colors disabled:opacity-50"
+                            disabled={!approvePopup.companyId}
+                            onClick={() => {
+                                setConfirmApprovePopup({
+                                    open: true,
+                                    app: approvePopup.app,
+                                    companyId: approvePopup.companyId
+                                });
+                                setApprovePopup({ open: false, app: null, companyId: "" });
+                            }}
+                        >
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        {/* Approve Confirmation Popup */}
+        {confirmApprovePopup.open && confirmApprovePopup.app && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-w-md w-full text-center">
+                    <div className="mb-4">
+                        <svg className="w-12 h-12 mx-auto text-red-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12l2.5 2.5L16 9" />
+                        </svg>
+                    </div>
+                    <div className="text-lg font-semibold text-gray-800 mb-2">Confirm Allocation</div>
+                    <div className="text-gray-500 text-sm mb-6">
+                        Allocate <span className="font-bold text-green-700">{confirmApprovePopup.app.student.name}</span>
+                        {" "}to{" "}
+                        <span className="font-bold text-green-700">
+                            {confirmApprovePopup.app.choices.find(c => (c.companyId || c.company) === confirmApprovePopup.companyId)?.company || "selected company"}
+                        </span>?
+                    </div>
+                    <div className="flex justify-center gap-4">
+                        <button
+                            className="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                            onClick={() => setConfirmApprovePopup({ open: false, app: null, companyId: "" })}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="px-5 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 shadow-sm transition-colors"
+                            onClick={() => {
+                                handleApprovedApplication(confirmApprovePopup.app._id, confirmApprovePopup.companyId);
+                                setConfirmApprovePopup({ open: false, app: null, companyId: "" });
+                            }}
+                        >
+                            Yes, Allocate
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
         {/* Reject Reason Popup */}
         {rejectPopup.open && (
             <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
@@ -602,6 +875,104 @@ function StudentApplicationList() {
                             }}
                         >
                             Submit
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        {/* Download Allocated Students Popup */}
+        {downloadPopupOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 max-w-lg w-full">
+                    <div className="text-lg font-semibold text-gray-800 mb-1">Download Students</div>
+                    <div className="text-gray-500 text-sm mb-4">Choose company-wise or all students download.</div>
+                    <div className="flex items-center bg-gray-100 rounded-lg p-1 mb-4">
+                        <button
+                            type="button"
+                            className={`flex-1 px-3 py-2 text-sm rounded-md transition-colors ${
+                                downloadMode === "company" ? "bg-white text-red-700 font-semibold shadow-sm" : "text-gray-600 hover:text-gray-800"
+                            }`}
+                            onClick={() => setDownloadMode("company")}
+                        >
+                            Company
+                        </button>
+                        <button
+                            type="button"
+                            className={`flex-1 px-3 py-2 text-sm rounded-md transition-colors ${
+                                downloadMode === "all" ? "bg-white text-red-700 font-semibold shadow-sm" : "text-gray-600 hover:text-gray-800"
+                            }`}
+                            onClick={() => setDownloadMode("all")}
+                        >
+                            All
+                        </button>
+                    </div>
+                    {downloadMode === "company" ? (
+                        <>
+                            <div className="mb-3">
+                                <input
+                                    type="text"
+                                    value={companySearch}
+                                    onChange={(e) => setCompanySearch(e.target.value)}
+                                    placeholder="Search company..."
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                                />
+                            </div>
+                            <div className="mb-3">
+                                <select
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 text-gray-700"
+                                    value={downloadType}
+                                    onChange={(e) => setDownloadType(e.target.value)}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="alloted">Alloted</option>
+                                    <option value="not_alloted">Not Alloted</option>
+                                </select>
+                            </div>
+                            <div className="border border-gray-200 rounded-lg max-h-56 overflow-y-auto">
+                                {filteredCompanies.length > 0 ? (
+                                    filteredCompanies.map((company) => (
+                                        <button
+                                            key={company._id}
+                                            type="button"
+                                            className={`w-full text-left px-3 py-2 text-sm hover:bg-red-50 hover:text-red-700 ${
+                                                selectedCompanyId === company._id ? "bg-red-50 text-red-700 font-semibold" : "text-gray-700"
+                                            }`}
+                                            onClick={() => setSelectedCompanyId(company._id)}
+                                        >
+                                            {company.name}
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="px-3 py-2 text-sm text-gray-400">No companies found.</div>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="mb-3">
+                            <select
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 text-gray-700"
+                                value={allDownloadType}
+                                onChange={(e) => setAllDownloadType(e.target.value)}
+                            >
+                                <option value="alloted">Alloted</option>
+                                <option value="unalloted">Unalloted</option>
+                            </select>
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-3 mt-5">
+                        <button
+                            className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+                            onClick={() => setDownloadPopupOpen(false)}
+                            disabled={downloading}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 shadow-sm transition-colors disabled:opacity-50"
+                            onClick={downloadMode === "company" ? handleDownloadCompanyList : handleDownloadAllCompanyList}
+                            disabled={(downloadMode === "company" && !selectedCompanyId) || downloading}
+                        >
+                            {downloading ? "Downloading..." : "Download"}
                         </button>
                     </div>
                 </div>

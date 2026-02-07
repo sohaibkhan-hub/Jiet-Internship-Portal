@@ -86,7 +86,16 @@ const createBranch = asyncHandler(async (req, res) => {
 // Update Branch
 const updateBranch = asyncHandler(async (req, res) => {
   const { branchId } = req.params;
-  const { name, specializations, hodName, hodEmail, isActive } = req.body;
+  const {
+    college,
+    name,
+    code,
+    programType,
+    hodName,
+    hodEmail,
+    externalBranchDetails,
+    isActive,
+  } = req.body;
 
   const branch = await Branch.findById(branchId);
 
@@ -94,10 +103,23 @@ const updateBranch = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Branch not found");
   }
 
+  if (code) {
+    const existingBranch = await Branch.findOne({
+      code: code.toUpperCase(),
+      _id: { $ne: branchId },
+    });
+    if (existingBranch) {
+      throw new ApiError(409, "Branch with this code already exists");
+    }
+    branch.code = code.toUpperCase();
+  }
+
+  if (college) branch.college = college;
   if (name) branch.name = name;
-  if (specializations) branch.specializations = specializations;
+  if (programType) branch.programType = programType;
   if (hodName) branch.hodName = hodName;
   if (hodEmail) branch.hodEmail = hodEmail;
+  if (externalBranchDetails) branch.externalMappings = externalBranchDetails;
   if (isActive !== undefined) branch.isActive = isActive;
 
   await branch.save();
@@ -106,6 +128,25 @@ const updateBranch = asyncHandler(async (req, res) => {
     .status(200)
     .json(
       new ApiResponse(200, branch, "Branch updated successfully")
+    );
+});
+
+// Delete Branch
+const deleteBranch = asyncHandler(async (req, res) => {
+  const { branchId } = req.params;
+
+  const branch = await Branch.findById(branchId);
+
+  if (!branch) {
+    throw new ApiError(404, "Branch not found");
+  }
+
+  await branch.deleteOne();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, branch, "Branch deleted successfully")
     );
 });
 
@@ -256,7 +297,7 @@ const getDomainsByBranchId = asyncHandler(async (req, res) => {
 // Update Domain
 const updateDomain = asyncHandler(async (req, res) => {
   const { domainId } = req.params;
-  const { name, description, applicableStreams, isActive } = req.body;
+  const { name, description, applicableBranches, isActive } = req.body;
 
   const domain = await Domain.findById(domainId);
 
@@ -264,9 +305,23 @@ const updateDomain = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Domain not found");
   }
 
-  if (name) domain.name = name;
+  if (name) {
+    const existingDomain = await Domain.findOne({ name, _id: { $ne: domainId } });
+    if (existingDomain) {
+      throw new ApiError(409, "Domain with this name already exists");
+    }
+    domain.name = name;
+  }
   if (description) domain.description = description;
-  if (applicableStreams) domain.applicableStreams = applicableStreams;
+  if (applicableBranches) {
+    for (const branchId of applicableBranches) {
+      const branch = await Branch.findById(branchId);
+      if (!branch) {
+        throw new ApiError(400, `Branch with ID ${branchId} does not exist`);
+      }
+    }
+    domain.applicableBranches = applicableBranches;
+  }
   if (isActive !== undefined) domain.isActive = isActive;
 
   await domain.save();
@@ -278,15 +333,36 @@ const updateDomain = asyncHandler(async (req, res) => {
     );
 });
 
+// Delete Domain
+const deleteDomain = asyncHandler(async (req, res) => {
+  const { domainId } = req.params;
+
+  const domain = await Domain.findById(domainId);
+
+  if (!domain) {
+    throw new ApiError(404, "Domain not found");
+  }
+
+  await domain.deleteOne();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, domain, "Domain deleted successfully")
+    );
+});
+
 export {
   getAllBranches,
   getBranchById,
   createBranch,
   updateBranch,
+  deleteBranch,
   getAllDomains,
   getDomainsByName,
   getDomainById,
   createDomain,
   updateDomain,
+  deleteDomain,
   getDomainsByBranchId,
 };

@@ -27,10 +27,36 @@ export const updateCompanyDetailsDomainAsync = createAsyncThunk(
   'company/updateCompanyDetailsDomain',
   async (companyDetails, { rejectWithValue }) => {
     try {
-      const response = await companyService.updateCompanyDetails(companyDetails);
+      const response = await companyService.updateCompanyDetails(companyDetails._id, companyDetails);
       return response;
     } catch (error) {
       const message = error?.response?.data || 'Update failed';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const updateCompanyAsync = createAsyncThunk(
+  'company/updateCompany',
+  async ({ companyId, companyData }, { rejectWithValue }) => {
+    try {
+      const response = await companyService.updateCompanyDetails(companyId, companyData);
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Update failed';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const deleteCompanyAsync = createAsyncThunk(
+  'company/deleteCompany',
+  async (companyId, { rejectWithValue }) => {
+    try {
+      const response = await companyService.deleteCompany(companyId);
+      return response;
+    } catch (error) {
+      const message = error?.response?.data || 'Delete failed';
       return rejectWithValue(message);
     }
   }
@@ -95,6 +121,27 @@ const companySlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
+      .addCase(updateCompanyAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateCompanyAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        const updated = action.payload?.data;
+        if (updated?._id) {
+          state.allCompanies = state.allCompanies.map((c) =>
+            c._id === updated._id ? updated : c
+          );
+          state.allCompaniesByBranch = state.allCompaniesByBranch.map((c) =>
+            c._id === updated._id ? updated : c
+          );
+        }
+      })
+      .addCase(updateCompanyAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
       .addCase(getAllCompaniesAsync.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -118,6 +165,23 @@ const companySlice = createSlice({
         state.error = null;
       })
       .addCase(getAllCompaniesByBranchAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(deleteCompanyAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteCompanyAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        const deleted = action.payload?.data;
+        if (deleted?._id) {
+          state.allCompanies = state.allCompanies.filter((c) => c._id !== deleted._id);
+          state.allCompaniesByBranch = state.allCompaniesByBranch.filter((c) => c._id !== deleted._id);
+        }
+      })
+      .addCase(deleteCompanyAsync.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

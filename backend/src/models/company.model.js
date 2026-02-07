@@ -103,12 +103,6 @@ const companySchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Company is Active for Recruitment
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-
     // Recruitment Status
     recruitmentStatus: {
       type: String,
@@ -120,7 +114,6 @@ const companySchema = new mongoose.Schema(
 );
 
 // Indexes for faster lookups and filtering
-companySchema.index({ isActive: 1 });
 companySchema.index({ recruitmentStatus: 1 });
 companySchema.index({ domainTags: 1 });
 companySchema.index({ allowedBranches: 1 });

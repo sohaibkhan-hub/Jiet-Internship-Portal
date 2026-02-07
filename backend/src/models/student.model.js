@@ -149,6 +149,9 @@ const studentSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Domain",
           },
+          resume: {
+            type: String, // URL or file path
+          },
         },
       ],
 
@@ -181,6 +184,21 @@ const studentSchema = new mongoose.Schema(
           status: {
             type: String,
             enum: ["NOT_APPLIED", "SUBMITTED", "PENDING_REVIEW", "APPROVED_BY_TPO", "ALLOCATED", "REJECTED_BY_TPO", "REJECTED", "NOT_ALLOCATED"],
+            required: true,
+          },
+          createdAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+      ],
+
+      // Allocation Status History
+      allocationStatusHistory: [
+        {
+          status: {
+            type: String,
+            enum: ["NOT_APPLIED", "ALLOCATED", "REJECTED", "NOT_ALLOCATED"],
             required: true,
           },
           createdAt: {

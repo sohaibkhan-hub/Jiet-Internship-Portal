@@ -14,10 +14,12 @@ function Timeline({history, profile}) {
     "REJECTED"
   ];
 
+  const studentId = profile?._id;
+
   // Generate Training Letter PDF via backend template
   const generateTrainingLetterPDF = async () => {
     try {
-      const blob = await studentService.downloadTrainingLetter();
+      const blob = await studentService.downloadTrainingLetter(studentId);
 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");

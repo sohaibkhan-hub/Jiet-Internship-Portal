@@ -24,5 +24,35 @@ export const branchDomainService = {
   async getAllBranches() {
     const response = await api.get('/branch-domain/branches');
     return response.data.data; // Extract data from ApiResponse wrapper
+  },
+
+  async createBranch(branchData) {
+    const response = await api.post('/branch-domain/create-branch', branchData);
+    return response.data.data;
+  },
+
+  async updateBranch(branchId, branchData) {
+    const response = await api.put(`/branch-domain/branches/${branchId}`, branchData);
+    return response.data.data;
+  },
+
+  async deleteBranch(branchId) {
+    const response = await api.delete(`/branch-domain/branches/${branchId}`);
+    return response.data.data;
+  },
+
+  async createDomain(domainData) {
+    const response = await api.post('/branch-domain/create-domain', domainData);
+    return response.data.data;
+  },
+
+  async updateDomain(domainId, domainData) {
+    const response = await api.put(`/branch-domain/update/${domainId}`, domainData);
+    return response.data.data;
+  },
+
+  async deleteDomain(domainId) {
+    const response = await api.delete(`/branch-domain/delete/${domainId}`);
+    return response.data.data;
   }
 };

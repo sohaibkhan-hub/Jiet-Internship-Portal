@@ -1,16 +1,41 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { MdSearch, MdFilterList, MdEdit, MdDelete, MdRefresh, MdCheckCircle, MdCancel, MdArrowDropDown } from "react-icons/md";
+import { MdSearch, MdFilterList, MdEdit, MdDelete, MdRefresh, MdCheckCircle, MdCancel, MdArrowDropDown, MdAdd, MdClose } from "react-icons/md";
 import HeaderProfile from "../../../components/HeaderProfile";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
-import { getAllBranchesAsync, getAllDomainsAsync } from "../../../store/slices/branchDomainSlice";
+import { createDomainAsync, deleteDomainAsync, getAllBranchesAsync, getAllDomainsAsync, updateDomainAsync } from "../../../store/slices/branchDomainSlice";
 
+import { toast } from "react-toastify";
+import AddUpdateDomainModel from "./component-model/AddUpdateDomainModel";
+import DeleteModel from "./component-model/DeleteModel";
 function DomainList() {
     // Dropdown open state for custom filters
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
     const branchDropdownRef = useRef(null);
     const statusDropdownRef = useRef(null);
-    // Close dropdowns on outside click
+    // Filter bar toggle for small screens
+    const [showFilters, setShowFilters] = useState(false);
+    const [showAddDomain, setShowAddDomain] = useState(false);
+    const [showUpdateDomain, setShowUpdateDomain] = useState(false);
+    const [selectedDomain, setSelectedDomain] = useState(null);
+    const { allDomains = [], allBranches = [] } = useAppSelector((state) => state.domainBranch || {});
+    const [showDeleteDomain, setShowDeleteDomain] = useState(false);
+    const [domainToDelete, setDomainToDelete] = useState(null);
+    
+    const dispatch = useAppDispatch();
+
+    useEffect(() => {
+        dispatch(getAllBranchesAsync());
+        dispatch(getAllDomainsAsync());
+    }, [dispatch]);
+
+    // Helper to close all dropdowns
+    const closeAllDropdowns = () => {
+        setStatusDropdownOpen(false);
+        setBranchDropdownOpen(false);
+    };
+
+        // Close dropdowns on outside click
     useEffect(() => {
         function handleClickOutside(event) {
             if (branchDropdownOpen && branchDropdownRef.current && !branchDropdownRef.current.contains(event.target)) {
@@ -25,22 +50,6 @@ function DomainList() {
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [branchDropdownOpen, statusDropdownOpen]);
-    // Filter bar toggle for small screens
-    const [showFilters, setShowFilters] = useState(false);
-    const { allDomains = [], allBranches = [] } = useAppSelector((state) => state.domainBranch || {});
-    
-    const dispatch = useAppDispatch();
-
-    useEffect(() => {
-        dispatch(getAllBranchesAsync());
-        dispatch(getAllDomainsAsync());
-    }, [dispatch]);
-
-    // Helper to close all dropdowns
-    const closeAllDropdowns = () => {
-        setStatusDropdownOpen(false);
-        setBranchDropdownOpen(false);
-    };
 
     // --- FILTER STATE ---
     const [filters, setFilters] = useState({
@@ -94,7 +103,66 @@ function DomainList() {
     };
 
     return (
-        <div className="flex bg-gradient-to-br from-gray-100 via-white to-gray-200 min-h-[calc(100vh-5rem)]">
+        <div className="flex bg-gradient-to-br from-gray-100 via-white to-gray-200 min-h-[calc(100vh-5rem)] relative">
+            {/* Add Domain Modal */}
+            {showAddDomain && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)'}}>
+                    <div className="bg-white rounded-xl shadow-lg max-w-lg w-full relative animate-fadeIn">
+                        <button
+                            className="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-2xl"
+                            onClick={() => setShowAddDomain(false)}
+                            title="Close"
+                        >
+                            <MdClose />
+                        </button>
+                        <div className="p-0">
+                            <AddUpdateDomainModel
+                                onClose={() => setShowAddDomain(false)}
+                                isUpdate={false}
+                                onSubmit={async (data) => {
+                                    try {
+                                        await dispatch(createDomainAsync(data)).unwrap();
+                                        toast.success("Domain created successfully");
+                                        setShowAddDomain(false);
+                                    } catch (err) {
+                                        toast.error(typeof err === "string" ? err : err?.message || "Failed to create domain");
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showUpdateDomain && selectedDomain && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)'}}>
+                    <div className="bg-white rounded-xl shadow-lg max-w-lg w-full relative animate-fadeIn">
+                        <button
+                            className="absolute top-3 right-3 text-gray-400 hover:text-red-600 text-2xl"
+                            onClick={() => { setShowUpdateDomain(false); setSelectedDomain(null); }}
+                            title="Close"
+                        >
+                            <MdClose />
+                        </button>
+                        <div className="p-0">
+                            <AddUpdateDomainModel
+                                onClose={() => { setShowUpdateDomain(false); setSelectedDomain(null); }}
+                                initialData={selectedDomain}
+                                isUpdate={true}
+                                onSubmit={async (data) => {
+                                    try {
+                                        await dispatch(updateDomainAsync({ domainId: selectedDomain?._id, domainData: data })).unwrap();
+                                        toast.success("Domain updated successfully");
+                                        setShowUpdateDomain(false);
+                                        setSelectedDomain(null);
+                                    } catch (err) {
+                                        toast.error(typeof err === "string" ? err : err?.message || "Failed to update domain");
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Main Content */}
             <section className="w-full max-w-7xl mx-auto px-0 md:px-0 flex flex-col h-screen overflow-hidden">
                 {/* Fixed Header Section */}
@@ -226,6 +294,12 @@ function DomainList() {
                                     </span>
                                 )}
                             </button>
+                            <button
+                                onClick={() => setShowAddDomain(true)}
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 border border-red-300 rounded-lg text-sm font-medium text-white hover:bg-red-600 hover:border-red-500 transition-colors relative"
+                            >
+                                <MdAdd className="h-6 w-6" /> Domain
+                            </button>
                         </div>
                     </div>
                     {/* --- SCROLLABLE TABLE AREA --- */}
@@ -254,7 +328,6 @@ function DomainList() {
                                                 <tr key={domain._id} className="hover:bg-red-50/30 transition-colors group">
                                                     <td className="py-3 px-6 align-top max-w-[170px]">
                                                         <div className="font-bold text-gray-800 text-sm break-words">{domain.name}</div>
-                                                        <div className="text-xs text-gray-400 font-mono mt-1">ID: {domain._id}</div>
                                                     </td>
                                                     <td className="py-3 px-6 align-top max-w-[370px]">
                                                         <div className="flex flex-wrap gap-1">
@@ -267,10 +340,14 @@ function DomainList() {
                                                     <td className="py-3 px-6 align-top">{new Date(domain.createdAt).toLocaleDateString()}</td>
                                                     <td className="py-3 px-6 align-top text-right">
                                                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
+                                                            <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit"
+                                                                onClick={() => { setSelectedDomain(domain); setShowUpdateDomain(true); }}
+                                                            >
                                                                 <MdEdit className="text-lg" />
                                                             </button>
-                                                            <button className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete">
+                                                            <button className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete"
+                                                                onClick={() => { setDomainToDelete(domain); setShowDeleteDomain(true); }}
+                                                            >
                                                                 <MdDelete className="text-lg" />
                                                             </button>
                                                         </div>
@@ -295,6 +372,30 @@ function DomainList() {
                     </div>
                 </div>
             </section>
+        {/* Delete Confirmation Popup (Reusable) */}
+        <DeleteModel
+            open={showDeleteDomain && !!domainToDelete}
+            onClose={() => {
+                setShowDeleteDomain(false);
+                setDomainToDelete(null);
+            }}
+            onConfirm={async () => {
+                try {
+                    await dispatch(deleteDomainAsync(domainToDelete?._id)).unwrap();
+                    toast.success("Domain deleted successfully");
+                } catch (err) {
+                    toast.error(typeof err === "string" ? err : err?.message || "Failed to delete domain");
+                } finally {
+                    setShowDeleteDomain(false);
+                    setDomainToDelete(null);
+                }
+            }}
+            title="Delete Domain"
+            message={domainToDelete ? `Are you sure you want to delete the domain ` +
+                `<span class='font-bold text-red-600'>${domainToDelete.name}</span>? This action cannot be undone.` : ""}
+            confirmText="Delete"
+            cancelText="Cancel"
+        />
         </div>
     );
 }

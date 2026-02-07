@@ -8,28 +8,17 @@ import {
   MdCheck,
   MdCancel,
   MdArrowDropDown,
-  MdEdit,
-  MdDelete,
 } from "react-icons/md";
 import HeaderProfile from "../../../components/HeaderProfile"; 
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
-import { deleteCompanyAsync, getAllCompaniesAsync } from "../../../store/slices/companySlice";
+import { getAllCompaniesAsync } from "../../../store/slices/companySlice";
 import { getAllBranchesAsync, getAllDomainsAsync } from "../../../store/slices/branchDomainSlice";
-import UpdateCompanyModel from './UpdateCompanyModel';
-import { toast } from "react-toastify";
-import DeleteModel from "../admin/component-model/DeleteModel";
+
 function CompanyList() {
     // Dropdown open state for custom filters
     const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
     const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
-    
-    // Modal state for editing companies
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [editCompany, setEditCompany] = useState(null);
-    // Modal state for deleting companies
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [deleteCompany, setDeleteCompany] = useState(null);
     
     const statusDropdownRef = useRef(null);
     const domainDropdownRef = useRef(null);
@@ -129,41 +118,6 @@ function CompanyList() {
     const [showFilters, setShowFilters] = React.useState(false);
         return (
         <>
-            {editModalOpen && editCompany && (
-                <UpdateCompanyModel
-                    open={editModalOpen}
-                    onClose={() => {
-                        setEditModalOpen(false);
-                        setEditCompany(null);
-                    }}
-                    initialData={editCompany}
-                />
-            )}
-            {deleteModalOpen && deleteCompany && (
-                <DeleteModel
-                    open={deleteModalOpen}
-                    onClose={() => {
-                        setDeleteModalOpen(false);
-                        setDeleteCompany(null);
-                    }}
-                    onConfirm={async () => {
-                        try {
-                            await dispatch(deleteCompanyAsync(deleteCompany._id)).unwrap();
-                            toast.success("Company deleted successfully");
-                        } catch (err) {
-                            toast.error(typeof err === "string" ? err : err?.message || "Failed to delete company");
-                        } finally {
-                            setDeleteModalOpen(false);
-                            setDeleteCompany(null);
-                        }
-                    }}
-                    title="Delete Company"
-                    message={`Are you sure you want to delete <b>${deleteCompany.name}</b>? This action cannot be undone.`}
-                    confirmText="Delete"
-                    cancelText="Cancel"
-                />
-            )}
-
             <div className="flex bg-gradient-to-br from-gray-100 via-white to-gray-200 md:min-h-[calc(100vh-5rem)]">
                 {/* Main Content */}
                 <section className="w-full max-w-7xl mx-auto px-0 md:px-0 flex flex-col h-screen overflow-hidden">
@@ -385,7 +339,6 @@ function CompanyList() {
                                                 <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Filled / Total</th>
                                                 <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Stipend</th>
                                                 <th className="py-2 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Recruitment</th>
-                                                <th className="py-3 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -460,33 +413,6 @@ function CompanyList() {
                                                         {/* Status */}
                                                         <td className="py-3 px-6 align-top">
                                                             {getStatusBadge(company.recruitmentStatus)}
-                                                        </td>
-                                                        {/* Actions */}
-                                                        <td className="py-3 px-6 align-top text-right">
-                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button
-                                                                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                                                                    title="Edit"
-                                                                    onClick={() => {
-                                                                        setEditCompany(company);
-                                                                        setEditModalOpen(true);
-                                                                    }}
-                                                                >
-                                                                    <MdEdit className="text-lg" />
-                                                                </button>
-                                                                <button className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete">
-                                                                <button
-                                                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                                                                    title="Delete"
-                                                                    onClick={() => {
-                                                                        setDeleteCompany(company);
-                                                                        setDeleteModalOpen(true);
-                                                                    }}
-                                                                >
-                                                                    <MdDelete className="text-lg" />
-                                                                </button>
-                                                                </button>
-                                                            </div>
                                                         </td>
                                                     </tr>
                                                 )})

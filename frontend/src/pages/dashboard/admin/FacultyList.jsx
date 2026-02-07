@@ -1,15 +1,23 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { MdSearch, MdFilterList, MdRefresh, MdArrowDropDown } from "react-icons/md";
+import { MdSearch, MdFilterList, MdRefresh, MdArrowDropDown, MdAdd, MdEdit, MdDelete } from "react-icons/md";
 import HeaderProfile from "../../../components/HeaderProfile";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
-import { getAllFacultyDetailsAsync } from "../../../store/slices/adminSlice";
+import { deleteFacultyAsync, getAllFacultyDetailsAsync, updateFacultyAsync } from "../../../store/slices/adminSlice";
 import { getAllBranchesAsync, getAllDomainsAsync } from "../../../store/slices/branchDomainSlice";
+import RegisterFacultyModel from "./component-model/RegisterFacultyModel";
+import DeleteModel from "./component-model/DeleteModel";
+import { toast } from "react-toastify";
 
 function FacultyList() {
     // Dropdown open state for custom filters
     const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
     const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
+    const [showAddFaculty, setShowAddFaculty] = useState(false);
+    const [showUpdateFaculty, setShowUpdateFaculty] = useState(false);
+    const [selectedFaculty, setSelectedFaculty] = useState(null);
+    const [showDeleteFaculty, setShowDeleteFaculty] = useState(false);
+    const [facultyToDelete, setFacultyToDelete] = useState(null);
     const branchDropdownRef = useRef(null);
     const roleDropdownRef = useRef(null);
     const allFacultyDetails = useAppSelector((state) => state.admin.allFacultyDetails || []);
@@ -223,6 +231,15 @@ function FacultyList() {
                                     <MdRefresh /> Reset
                                 </button>
                             </div>
+                            <div className="md:col-span-1 flex items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddFaculty(true)}
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 border border-red-300 rounded-lg text-sm font-medium text-white hover:bg-red-600 hover:border-red-500 transition-colors relative"
+                                >
+                                    <MdAdd className="h-6 w-6" /> Faculty
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -248,6 +265,7 @@ function FacultyList() {
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Temp Password</th>
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Designation</th>
                                             <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Program Type</th>
+                                            <th className="py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -264,11 +282,25 @@ function FacultyList() {
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.user?.tempPassword || 'N/A'}</td>
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.designation}</td>
                                                     <td className="py-4 px-6 align-top text-sm text-gray-700">{fac.branch?.programType || ''}</td>
+                                                    <td className="py-3 px-6 align-top text-right">
+                                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit"
+                                                                onClick={() => { setSelectedFaculty(fac); setShowUpdateFaculty(true); }}
+                                                            >
+                                                                <MdEdit className="text-lg" />
+                                                            </button>
+                                                            <button className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete"
+                                                                onClick={() => { setFacultyToDelete(fac); setShowDeleteFaculty(true); }}
+                                                            >
+                                                                <MdDelete className="text-lg" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan="7" className="py-12 text-center text-gray-400">
+                                                <td colSpan="9" className="py-12 text-center text-gray-400">
                                                     <div className="flex flex-col items-center justify-center">
                                                         <MdFilterList className="text-4xl mb-2 text-gray-300" />
                                                         <p>No faculty found.</p>
@@ -284,6 +316,56 @@ function FacultyList() {
                     </div>
                 </div>
             </section>
+            {showAddFaculty && (
+                <RegisterFacultyModel
+                    isModal
+                    onClose={() => setShowAddFaculty(false)}
+                />
+            )}
+            {showUpdateFaculty && selectedFaculty && (
+                <RegisterFacultyModel
+                    isModal
+                    isUpdate
+                    initialData={selectedFaculty}
+                    onClose={() => {
+                        setShowUpdateFaculty(false);
+                        setSelectedFaculty(null);
+                    }}
+                    onSubmit={async (data) => {
+                        try {
+                            await dispatch(updateFacultyAsync({ facultyId: selectedFaculty._id, facultyData: data })).unwrap();
+                            await dispatch(getAllFacultyDetailsAsync());
+                            toast.success("Faculty updated successfully");
+                            setShowUpdateFaculty(false);
+                            setSelectedFaculty(null);
+                        } catch (err) {
+                            toast.error(typeof err === "string" ? err : err?.message || "Failed to update faculty");
+                        }
+                    }}
+                />
+            )}
+            <DeleteModel
+                open={showDeleteFaculty && !!facultyToDelete}
+                onClose={() => {
+                    setShowDeleteFaculty(false);
+                    setFacultyToDelete(null);
+                }}
+                onConfirm={async () => {
+                    try {
+                        await dispatch(deleteFacultyAsync(facultyToDelete._id)).unwrap();
+                        toast.success("Faculty deleted successfully");
+                    } catch (err) {
+                        toast.error(typeof err === "string" ? err : err?.message || "Failed to delete faculty");
+                    } finally {
+                        setShowDeleteFaculty(false);
+                        setFacultyToDelete(null);
+                    }
+                }}
+                title="Delete Faculty"
+                message={facultyToDelete ? `Are you sure you want to delete <span class='font-bold text-red-600'>${facultyToDelete.fullName}</span>? This action cannot be undone.` : ""}
+                confirmText="Delete"
+                cancelText="Cancel"
+            />
         </div>
     );
 }

@@ -8,6 +8,7 @@ import {
   updateCompanySeats,
   getCompanySeats,
   getAllCompaniesWithBranch,
+  deleteCompany,
 } from "../controllers/company.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router();
@@ -18,6 +19,7 @@ router.get("/all-companies-with-branch/:branchId", verifyJWT, getAllCompaniesWit
 router.get("/:companyId", getCompanyById);
 router.get("/eligible", getCompaniesForStudent);
 router.put("/:companyId", verifyJWT, updateCompanyDetails);
+router.delete("/:companyId", verifyJWT, deleteCompany);
 router.put("/:companyId/seats", verifyJWT, updateCompanySeats);
 router.get("/:companyId/seats", getCompanySeats);
 

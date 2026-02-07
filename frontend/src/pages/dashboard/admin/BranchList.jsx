@@ -9,12 +9,21 @@ import {
   MdCheckCircle,
   MdCancel,
   MdArrowDropDown,
+  MdAdd,
 } from "react-icons/md";
-import HeaderProfile from "../../../components/HeaderProfile";
+import HeaderProfile from "../../../components/HeaderProfile"; 
+import DeleteModel from "./component-model/DeleteModel";
 import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
-import { getAllBranchesAsync } from "../../../store/slices/branchDomainSlice";
+import { createBranchAsync, deleteBranchAsync, getAllBranchesAsync, updateBranchAsync } from "../../../store/slices/branchDomainSlice";
+import { toast } from "react-toastify";
+import AddUpdateBranchModel from "./component-model/AddUpdateBranchModel";
 
 function BranchList() {
+    const [showAddBranch, setShowAddBranch] = React.useState(false);
+    const [showUpdateBranch, setShowUpdateBranch] = useState(false);
+    const [selectedBranch, setSelectedBranch] = useState(null);
+    const [showDeleteBranch, setShowDeleteBranch] = useState(false);
+    const [branchToDelete, setBranchToDelete] = useState(null);
     // Dropdown open state for custom filters
     const [programTypeDropdownOpen, setProgramTypeDropdownOpen] = useState(false);
     const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -225,6 +234,12 @@ function BranchList() {
                             </span>
                         )}
                     </button>
+                    <button
+                        onClick={() => setShowAddBranch(true)}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500 border border-red-300 rounded-lg text-sm font-medium text-white hover:bg-red-600 hover:border-red-500 transition-colors relative"
+                    >
+                        <MdAdd className="h-6 w-6" /> Branch
+                    </button>
                 </div>
             </div>
 
@@ -249,7 +264,7 @@ function BranchList() {
                                     <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">HOD Email</th>
                                     <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                                     <th className="py-3 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Created At</th>
-                                    {/* <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th> */}
+                                    <th className="py-2 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -258,6 +273,7 @@ function BranchList() {
                                         <tr key={branch._id} className="hover:bg-red-50/30 transition-colors group ">
                                             <td className="py-3 px-3 align-top max-w-[220px]">
                                                 <div className="font-bold text-gray-800 text-sm">{branch.name}</div>
+                                                <div className=" text-gray-500 text-sm">{branch._id}</div>
                                             </td>
                                             <td className="py-3 px-3 align-top">{branch.code}</td>
                                             <td className="py-3 px-3 align-top">{branch.college}</td>
@@ -266,16 +282,30 @@ function BranchList() {
                                             <td className="py-3 px-3 align-top">{branch.hodEmail}</td>
                                             <td className="py-3 px-3 align-top">{getStatusBadge(branch.isActive)}</td>
                                             <td className="py-3 px-3 align-top">{new Date(branch.createdAt).toLocaleDateString()}</td>
-                                            {/* <td className="py-3 px-3 align-top text-right">
+                                            <td className="py-3 px-3 align-top text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
+                                                    <button
+                                                        className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                                        title="Edit"
+                                                        onClick={() => {
+                                                            setSelectedBranch(branch);
+                                                            setShowUpdateBranch(true);
+                                                        }}
+                                                    >
                                                         <MdEdit className="text-lg" />
                                                     </button>
-                                                    <button className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete">
+                                                    <button
+                                                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                        title="Delete"
+                                                        onClick={() => {
+                                                            setBranchToDelete(branch);
+                                                            setShowDeleteBranch(true);
+                                                        }}
+                                                    >
                                                         <MdDelete className="text-lg" />
                                                     </button>
                                                 </div>
-                                            </td> */}
+                                            </td>
                                         </tr>
                                     ))
                                 ) : (
@@ -294,9 +324,68 @@ function BranchList() {
                 </div>
                 {/* Result Count Footer removed as per new design */}
             </div>
+        {/* Delete Confirmation Popup (Reusable) */}
+        <DeleteModel
+            open={showDeleteBranch && !!branchToDelete}
+            onClose={() => {
+                setShowDeleteBranch(false);
+                setBranchToDelete(null);
+            }}
+            onConfirm={async () => {
+                try {
+                    await dispatch(deleteBranchAsync(branchToDelete?._id)).unwrap();
+                    toast.success("Branch deleted successfully");
+                } catch (err) {
+                    toast.error(typeof err === "string" ? err : err?.message || "Failed to delete branch");
+                } finally {
+                    setShowDeleteBranch(false);
+                    setBranchToDelete(null);
+                }
+            }}
+            title="Delete Branch"
+            message={branchToDelete ? `Are you sure you want to delete the branch ` +
+                `<span class='font-bold text-red-600'>${branchToDelete.name}</span>? This action cannot be undone.` : ""}
+            confirmText="Delete"
+            cancelText="Cancel"
+        />
         </div>
       </section>
-    </div>
+        {/* AddBranch Popup Modal */}
+        {showAddBranch && (
+            <AddUpdateBranchModel
+                onClose={() => setShowAddBranch(false)}
+                onSubmit={async (data) => {
+                    try {
+                        await dispatch(createBranchAsync(data)).unwrap();
+                        toast.success("Branch created successfully");
+                        setShowAddBranch(false);
+                    } catch (err) {
+                        toast.error(typeof err === "string" ? err : err?.message || "Failed to create branch");
+                    }
+                }}
+            />
+        )}
+        {showUpdateBranch && selectedBranch && (
+            <AddUpdateBranchModel
+                onClose={() => {
+                    setShowUpdateBranch(false);
+                    setSelectedBranch(null);
+                }}
+                initialData={selectedBranch}
+                isUpdate
+                onSubmit={async (data) => {
+                    try {
+                        await dispatch(updateBranchAsync({ branchId: selectedBranch?._id, branchData: data })).unwrap();
+                        toast.success("Branch updated successfully");
+                        setShowUpdateBranch(false);
+                        setSelectedBranch(null);
+                    } catch (err) {
+                        toast.error(typeof err === "string" ? err : err?.message || "Failed to update branch");
+                    }
+                }}
+            />
+        )}
+        </div>
   );
 }
 

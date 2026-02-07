@@ -15,6 +15,7 @@ const addCompany = asyncHandler(async (req, res) => {
     allowedBranches,
     totalSeats,
     stipendAmount,
+    recruitmentStatus,
   } = req.body;
 
   if (req.user.role !== "ADMIN" && req.user.role !== "FACULTY") {
@@ -55,8 +56,7 @@ const addCompany = asyncHandler(async (req, res) => {
     allowedBranches: allowedBranches || [],
     totalSeats,
     stipendAmount: stipendAmount || 'N/A',
-    isActive: true,
-    recruitmentStatus: "OPEN",
+    recruitmentStatus: recruitmentStatus || "OPEN",
   });
 
   if (!newCompany) {
@@ -70,13 +70,9 @@ const addCompany = asyncHandler(async (req, res) => {
 
 // Get All Companies (TPO Dashboard)
 const getAllCompanies = asyncHandler(async (req, res) => {
-  const { isActive, recruitmentStatus } = req.query;
+  const { recruitmentStatus } = req.query;
 
   const filter = {};
-
-  if (isActive !== undefined) {
-    filter.isActive = isActive === "true";
-  }
 
   if (recruitmentStatus) {
     filter.recruitmentStatus = recruitmentStatus;
@@ -129,7 +125,6 @@ const getCompaniesForStudent = asyncHandler(async (req, res) => {
   }
 
   const filter = {
-    isActive: true,
     recruitmentStatus: "OPEN",
     $expr: { $gt: [{ $subtract: ["$totalSeats", "$filledSeats"] }, 0] }, // Seats available
     minCgpa: { $lte: parseFloat(currentCgpa) }, // Student meets CGPA requirement
@@ -176,7 +171,15 @@ const getCompaniesForStudent = asyncHandler(async (req, res) => {
 // Update Company Details
 const updateCompanyDetails = asyncHandler(async (req, res) => {
   const { companyId } = req.params;
-  const { website, location, contactPerson, minCgpa, maxBacklogs, durationMonths, stipendType, stipendAmount, jobDescription, isActive, recruitmentStatus} = req.body;
+  const {
+    name,
+    location,
+    domainTags,
+    allowedBranches,
+    totalSeats,
+    stipendAmount,
+    recruitmentStatus,
+  } = req.body;
 
   const company = await Company.findById(companyId);
 
@@ -184,16 +187,36 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Company not found");
   }
 
-  if (website) company.website = website;
+  if (name) {
+    const existingCompany = await Company.findOne({
+      name,
+      _id: { $ne: companyId },
+    });
+    if (existingCompany) {
+      throw new ApiError(409, "Company with this name already exists");
+    }
+  }
+
+  if (Array.isArray(domainTags) && domainTags.length > 0) {
+    const validDomains = await Domain.find({ _id: { $in: domainTags } });
+    if (validDomains.length !== domainTags.length) {
+      throw new ApiError(400, "One or more provided domain IDs are invalid");
+    }
+  }
+
+  if (Array.isArray(allowedBranches) && allowedBranches.length > 0) {
+    const validBranches = await Branch.find({ _id: { $in: allowedBranches } });
+    if (validBranches.length !== allowedBranches.length) {
+      throw new ApiError(400, "One or more provided branch IDs are invalid");
+    }
+  }
+
+  if (name) company.name = name;
   if (location) company.location = location;
-  if (contactPerson) company.contactPerson = contactPerson;
-  if (minCgpa !== undefined) company.minCgpa = minCgpa;
-  if (maxBacklogs !== undefined) company.maxBacklogs = maxBacklogs;
-  if (durationMonths) company.durationMonths = durationMonths;
-  if (stipendType) company.stipendType = stipendType;
+  if (domainTags) company.domainTags = domainTags;
+  if (allowedBranches) company.allowedBranches = allowedBranches;
+  if (totalSeats !== undefined) company.totalSeats = totalSeats;
   if (stipendAmount !== undefined) company.stipendAmount = stipendAmount;
-  if (jobDescription) company.jobDescription = jobDescription;
-  if (isActive !== undefined) company.isActive = isActive;
   if (recruitmentStatus) company.recruitmentStatus = recruitmentStatus;
 
   await company.save();
@@ -202,6 +225,25 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
     .status(200)
     .json(
       new ApiResponse(200, company, "Company updated successfully")
+    );
+});
+
+// Delete Company
+const deleteCompany = asyncHandler(async (req, res) => {
+  const { companyId } = req.params;
+
+  const company = await Company.findById(companyId);
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  await company.deleteOne();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, company, "Company deleted successfully")
     );
 });
 
@@ -311,4 +353,5 @@ export {
   updateCompanySeats,
   getCompanySeats,
   getAllCompaniesWithBranch,
+  deleteCompany,
 };

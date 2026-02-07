@@ -17,8 +17,13 @@ export const companyService = {
     return response.data.data; // Extract data from ApiResponse wrapper
   },
 
-  async updateCompanyDetails(data)  {
-    const response = await api.post('/companies/update-company', data);
-    return response.data.data;
+  async updateCompanyDetails(companyId, data)  {
+    const response = await api.put(`/companies/${companyId}`, data);
+    return response.data; // ApiResponse
+  },
+
+  async deleteCompany(companyId) {
+    const response = await api.delete(`/companies/${companyId}`);
+    return response.data; // ApiResponse
   },
 };

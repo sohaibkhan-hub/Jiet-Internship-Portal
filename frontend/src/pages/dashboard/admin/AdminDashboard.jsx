@@ -2,19 +2,17 @@ import React, { useState } from "react";
 import Sidenav from "../../../components/Sidenav";
 import { MdPermIdentity, MdAddCircle, MdDns, MdSettings, MdList, MdPersonAdd, MdDomain, MdDeviceHub, MdSchool, MdLock, MdBusiness, MdPeople, MdAssignment, MdViewList } from "react-icons/md";
 import ChangePassword from "./ChangePassword";
-import RegisterStudent from "./RegisterStudent";
-import AddDomain from "./AddDomain";
-import AddBranch from "./AddBranch";
 import BranchList from "./BranchList";
 import DomainList from "./DomainList";
 import AdminProfile from "./AdminProfile";
 import StudentApplicationList from "./StudentApplicationList";
 import StudentList from "./StudentList";
 import CompanyList from "../faculty/CompanyList";
-import RegisterFaculty from "./RegisterFaculty";
 import FacultyList from "./FacultyList";
 import StudentProfileUpdate from "./StudentProfileUpdate";
 import { BsListCheck } from "react-icons/bs";
+import AddCompany from "../faculty/AddCompany";
+import MasterSetting from "./MasterSetting";
 
 const MENU_CONFIG = [
   {
@@ -36,16 +34,10 @@ const MENU_CONFIG = [
     component: CompanyList,
   },
   {
-    label: "Register Student",
-    icon: MdSchool,
-    key: "registerStudent",
-    component: RegisterStudent,
-  },
-  {
-    label: "Register Faculty",
+    label: "Add Company ",
     icon: MdPersonAdd,
-    key: "registerFaculty",
-    component: RegisterFaculty,
+    key: "updateCompany",
+    component: AddCompany,
   },
   {
     label: "Student Application",
@@ -53,18 +45,6 @@ const MENU_CONFIG = [
     key: "studentApplicationList",
     component: StudentApplicationList,
   },
-  // {
-  //   label: "Add Domain",
-  //   icon: MdDomain,
-  //   key: "addDomain",
-  //   component: AddDomain,
-  // },
-  // {
-  //   label: "Add Branch",
-  //   icon: MdDeviceHub,
-  //   key: "addBranch",
-  //   component: AddBranch,
-  // },
   {
     label: "Branch List",
     icon: MdDeviceHub,
@@ -95,6 +75,12 @@ const MENU_CONFIG = [
     key: "updateStudent",
     component: StudentProfileUpdate,
   },
+  {
+    label: "Settings",
+    icon: MdSettings,
+    key: "settings",
+    component: MasterSetting
+  }
 ];
 
 function AdminDashboard() {

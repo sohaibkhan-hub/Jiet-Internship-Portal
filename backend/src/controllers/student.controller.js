@@ -3,8 +3,10 @@ import { ApiError } from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import { Student } from "../models/student.model.js";
 import { User } from "../models/user.model.js";
+import { FeatureSettings } from "../models/featureSettings.model.js";
 import { Domain } from "../models/domain.model.js";
 import { Company } from "../models/company.model.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import fs from "fs";
 import path from "path";
@@ -215,7 +217,7 @@ const updateSurveyPreferences = asyncHandler(async (req, res) => {
 // Submit Internship Choices (4 Priority Choices, with companyId, domainId, location, priority)
 const submitInternshipChoices = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
-  const { choices } = req.body;
+  let { choices } = req.body;
 
   if (!userId) {
     throw new ApiError(401, "Unauthorized");
@@ -230,6 +232,14 @@ const submitInternshipChoices = asyncHandler(async (req, res) => {
   const studentCheck = await Student.findOne({ user: userId });
   if (studentCheck.internshipData.isFormSubmitted) {
     throw new ApiError(400, "Internship choices have already been submitted and cannot be modified");
+  }
+
+  if (typeof choices === "string") {
+    try {
+      choices = JSON.parse(choices);
+    } catch (err) {
+      throw new ApiError(400, "Invalid choices format");
+    }
   }
 
   if (!choices || !Array.isArray(choices) || choices.length === 0) {
@@ -262,10 +272,9 @@ const submitInternshipChoices = asyncHandler(async (req, res) => {
 
   // 1. Verify all companies exist, are active, and OPEN, and match the domainId
   const companyIds = choices.map(c => c.companyId);
-  const { Company } = await import("../models/company.model.js");
-  const companies = await Company.find({ _id: { $in: companyIds }, isActive: true, recruitmentStatus: "OPEN" }).populate("domainTags");
+  const companies = await Company.find({ _id: { $in: companyIds }, recruitmentStatus: "OPEN" }).populate("domainTags");
   if (companies.length !== companyIds.length) {
-    throw new ApiError(400, "One or more companies are invalid, inactive, or not open for recruitment");
+    throw new ApiError(400, "One or more companies are invalid or not open for recruitment");
   }
 
   // 2. For each choice, check company-domain match and student preference
@@ -294,14 +303,40 @@ const submitInternshipChoices = asyncHandler(async (req, res) => {
   }
 
   // Save choices in the new structure, including domain (company, domain, location, priority)
-    student.internshipData = student.internshipData || {};
+  const files = req.files || {};
+    const processedChoices = [];
 
-    student.internshipData.choices = choices.map(c => ({
-      company: c.companyId.toString(),
-      domain: c.domainId.toString(),
-      location: c.location,
-      priority: c.priority,
-    }));
+    for (const choice of choices) {
+      const priority = choice.priority;
+      const fileKey = `resume_${priority}`; // e.g., resume_1
+      let resumeUrl = "";
+
+      // Check if file exists for this priority
+      if (files[fileKey] && files[fileKey][0]) {
+        const localFilePath = files[fileKey][0].path;
+        const uploadResult = await uploadOnCloudinary(localFilePath);
+        
+        if (!uploadResult?.secure_url) {
+          throw new ApiError(500, `Failed to upload resume for choice priority ${priority}`);
+        }
+        resumeUrl = uploadResult.secure_url;
+      } else {
+        throw new ApiError(400, `Resume file is mandatory for choice priority ${priority}`);
+      }
+
+      processedChoices.push({
+        company: choice.companyId,
+        domain: choice.domainId,
+        location: choice.location,
+        priority: choice.priority,
+        resume: resumeUrl // The Cloudinary URL
+      });
+    }
+
+    // 5. Update Student Data
+    // Ensure we initialize objects if they don't exist
+    student.internshipData = student.internshipData || {};
+    student.internshipData.choices = processedChoices;
 
     student.internshipData.isFormSubmitted = true;
     student.internshipData.approvalStatus = "PENDING_REVIEW";
@@ -375,9 +410,8 @@ const getAllCompaniesWithDomains = asyncHandler(async (req, res) => {
   if (!domain) {
     throw new ApiError(404, "Domain not found or inactive");
   }
-  // Find all companies with this domain, isActive, and recruitmentStatus OPEN
+  // Find all companies with this domain and recruitmentStatus OPEN
   const companies = await Company.find({
-    isActive: true,
     recruitmentStatus: "OPEN",
     domainTags: domainId,
   })
@@ -391,19 +425,14 @@ const getAllCompaniesWithDomains = asyncHandler(async (req, res) => {
 
 // Generate Training Letter PDF from official template
 const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
-  const userId = req.user?._id;
+  const studentId = req.params.studentId;
 
-  if (!userId) {
+  if (!studentId) {
     throw new ApiError(401, "Unauthorized");
   }
 
-  const user = await User.findById(userId);
-
-  if (!user || user.role !== "STUDENT") {
-    throw new ApiError(403, "Not a student user");
-  }
-
-  const student = await Student.findOne({ user: userId })
+  const student = await Student.findById(studentId)
+    .populate("user", "email role")
     .populate("branch", "name code programType")
     .populate("internshipData.allocatedCompany", "name location");
 
@@ -466,7 +495,7 @@ const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
 
   // Branch Name : ______________________
     firstPage.drawText(branchName ?? "", {
-    x: 186,
+    x: 146,
     y: height - 397,
     size: fontSize,
     font: boldFont,
@@ -498,6 +527,22 @@ const generateTrainingLetterPdf = asyncHandler(async (req, res) => {
   return res.status(200).send(Buffer.from(pdfBytes));
 });
 
+// Feature flags for students
+const getFeatureSettingsPublic = asyncHandler(async (req, res) => {
+  let settings = await FeatureSettings.findOne();
+  if (!settings) {
+    settings = await FeatureSettings.create({});
+  }
+  return res.status(200).json(
+    new ApiResponse(200, {
+      enableUpdateDomain: settings.enableUpdateDomain,
+      enableApplyCompany: settings.enableApplyCompany,
+      enableCompanyList: settings.enableCompanyList,
+      enableMyApplication: settings.enableMyApplication,
+    }, "Feature settings fetched")
+  );
+});
+
 
 export {
   getStudentProfile,
@@ -508,4 +553,5 @@ export {
   updateStudentDomain,
   getAllCompaniesWithDomains,
   generateTrainingLetterPdf,
+  getFeatureSettingsPublic,
 };

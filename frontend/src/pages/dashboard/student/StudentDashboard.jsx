@@ -9,7 +9,8 @@ import InternshipGuidelines from "./InternshipGuidlines";
 import { MdPermIdentity, MdAddCircle, MdDns, MdSettings, MdDomain, MdBusinessCenter, MdAssignmentInd, MdBusiness } from "react-icons/md";
 import { BsListCheck } from "react-icons/bs";
 import { FaUserEdit } from "react-icons/fa";
-import CompanyList from "../faculty/CompanyList";
+import CompanyList from "./CompanyList";
+import { studentService } from "../../../services/studentService";
 
 const MENU_CONFIG = [
   {
@@ -53,6 +54,12 @@ const MENU_CONFIG = [
 function StudentDashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const [activePage, setActivePage] = useState(MENU_CONFIG[0].key);
+  const [featureFlags, setFeatureFlags] = useState({
+    enableUpdateDomain: true,
+    enableApplyCompany: true,
+    enableCompanyList: true,
+    enableMyApplication: true,
+  });
 
   const handleToggle = () => setCollapsed((prev) => !prev);
   const handleNav = (navKey) => {
@@ -60,10 +67,43 @@ function StudentDashboard() {
     setActivePage(navKey);
   };
 
+  React.useEffect(() => {
+    const loadFlags = async () => {
+      try {
+        const flags = await studentService.getFeatureFlags();
+        if (flags) {
+          setFeatureFlags({
+            enableUpdateDomain: !!flags.enableUpdateDomain,
+            enableApplyCompany: !!flags.enableApplyCompany,
+            enableCompanyList: !!flags.enableCompanyList,
+            enableMyApplication: !!flags.enableMyApplication,
+          });
+        }
+      } catch {
+        // ignore and keep defaults
+      }
+    };
+    loadFlags();
+  }, []);
+
+  const filteredMenu = MENU_CONFIG.filter((item) => {
+    if (item.key === "domain") return featureFlags.enableUpdateDomain;
+    if (item.key === "company") return featureFlags.enableApplyCompany;
+    if (item.key === "companyList") return featureFlags.enableCompanyList;
+    if (item.key === "application") return featureFlags.enableMyApplication;
+    return true;
+  });
+
+  React.useEffect(() => {
+    if (!filteredMenu.find((i) => i.key === activePage)) {
+      setActivePage(filteredMenu[0]?.key || "profile");
+    }
+  }, [filteredMenu, activePage]);
+
   // For highlighting
   const navKey = activePage;
-  const menuItems = MENU_CONFIG.map(({ label, icon, key }) => ({ label, icon, key }));
-  const ActiveComponent = MENU_CONFIG.find((item) => item.key === activePage)?.component;
+  const menuItems = filteredMenu.map(({ label, icon, key }) => ({ label, icon, key }));
+  const ActiveComponent = filteredMenu.find((item) => item.key === activePage)?.component;
 
   // Responsive margin: on small screens, margin-left 64px if collapsed, 0 if open; on md+, 64px or 272px
   const getMarginLeft = () => {

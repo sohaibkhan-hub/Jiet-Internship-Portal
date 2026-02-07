@@ -6,8 +6,10 @@ import { User } from "../models/user.model.js";
 import { Branch } from "../models/branch.model.js";
 import { Domain } from "../models/domain.model.js";
 import { Company } from "../models/company.model.js";
+import { FeatureSettings } from "../models/featureSettings.model.js";
 import xlsx from "xlsx";
 import { Faculty } from "../models/faculty.model.js";
+import mongoose from "mongoose";
 
 // Utility: Generate 6-digit temporary password
 function generateTempPassword() {
@@ -23,7 +25,7 @@ function cleanValue(val) {
 
 // Register Single Student
 const registerStudent = asyncHandler(async (req, res) => {
-  const { email, fullName, rollNumber, registrationNumber, fatherName, dateOfBirth, phoneNumber, branchId, year } = req.body;
+  const { email, fullName, rollNumber, registrationNumber, fatherName, dateOfBirth, phoneNumber, branchId, year, domainsId } = req.body;
 
   const userId = req.user?._id;
   let newUser = null;
@@ -76,7 +78,17 @@ const registerStudent = asyncHandler(async (req, res) => {
     if (!branch) {
       throw new ApiError(404, "Branch not found");
     }
-
+    console.log(domainsId);
+    
+    // Verify all domains exists
+    const domainIdsArray = Array.isArray(domainsId) ? domainsId : (domainsId ? [domainsId] : []);
+    for (const domainId of domainIdsArray) {
+      const domain = await Domain.findById(domainId);
+      if (!domain) {
+        throw new ApiError(404, "One or more provided domain IDs are invalid");
+      }
+    }
+    
     // Generate 6-digit temp password
     // NOTE: password is used for login (hashed), tempPassword is stored in plain text for reference (e.g., to show to user/admin)
     // Always use the value in tempPassword for login, as password is set to the same value and then hashed
@@ -105,6 +117,9 @@ const registerStudent = asyncHandler(async (req, res) => {
       phoneNumber: phoneNumber || "",
       branch: branchId,
       year: year || "",
+      internshipData: {
+        preferredDomains: domainIdsArray,
+      },
       isActive: true,
     });
 
@@ -251,6 +266,153 @@ const registerFaculty = asyncHandler(async (req, res) => {
     }
     throw error;
   }
+});
+
+// Update Faculty (Admin/TPO only)
+const updateFaculty = asyncHandler(async (req, res) => {
+  const { facultyId } = req.params;
+  const {
+    email,
+    role,
+    fullName,
+    employeeId,
+    branchId,
+    phoneNumber,
+    designation,
+    dateOfBirth,
+    isActive,
+  } = req.body;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can update faculty");
+  }
+
+  const faculty = await Faculty.findById(facultyId);
+  if (!faculty) {
+    throw new ApiError(404, "Faculty not found");
+  }
+
+  const facultyUser = await User.findById(faculty.user);
+  if (!facultyUser) {
+    throw new ApiError(404, "Linked user not found");
+  }
+
+  if (email && email !== faculty.email) {
+    if (!email.endsWith("@jietjodhpur.ac.in")) {
+      throw new ApiError(400, "Register with a valid college email");
+    }
+    const existingUser = await User.findOne({ email, _id: { $ne: facultyUser._id } });
+    if (existingUser) {
+      throw new ApiError(409, "User with this email already exists");
+    }
+    const existingFaculty = await Faculty.findOne({ email, _id: { $ne: faculty._id } });
+    if (existingFaculty) {
+      throw new ApiError(409, "Faculty with this email already exists");
+    }
+    faculty.email = email;
+    facultyUser.email = email;
+  }
+
+  if (employeeId && employeeId !== faculty.employeeId) {
+    const empIdExists = await Faculty.findOne({ employeeId, _id: { $ne: faculty._id } });
+    if (empIdExists) {
+      throw new ApiError(409, "Faculty with this employee ID already exists");
+    }
+    faculty.employeeId = employeeId;
+  }
+
+  if (role) {
+    if (!["ADMIN", "TPO", "FACULTY"].includes(role)) {
+      throw new ApiError(400, "Invalid role. Must be one of: ADMIN, TPO, FACULTY");
+    }
+    facultyUser.role = role;
+  }
+
+  if (fullName) {
+    faculty.fullName = fullName;
+    facultyUser.fullName = fullName;
+  }
+
+  if (branchId) {
+    const branch = await Branch.findById(branchId);
+    if (!branch) {
+      throw new ApiError(404, "Branch not found");
+    }
+    faculty.branch = branchId;
+  }
+
+  if (phoneNumber !== undefined) faculty.phoneNumber = phoneNumber;
+  if (designation) faculty.designation = designation;
+  if (dateOfBirth) faculty.dateOfBirth = cleanValue(dateOfBirth) || null;
+  if (isActive !== undefined) faculty.isActive = isActive;
+
+  await faculty.save();
+  await facultyUser.save({ validateBeforeSave: false });
+
+  const facultyResponse = await Faculty.findById(faculty._id)
+    .populate("branch", "name code programType")
+    .populate({
+      path: "user",
+      select: "email +tempPassword role",
+    });
+
+  const facultyObj = facultyResponse.toObject();
+  facultyObj.role = facultyObj.user && facultyObj.user.role ? facultyObj.user.role : undefined;
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, facultyObj, "Faculty updated successfully")
+    );
+});
+
+// Delete Faculty (Admin/TPO only)
+const deleteFaculty = asyncHandler(async (req, res) => {
+  const { facultyId } = req.params;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can delete faculty");
+  }
+
+  const faculty = await Faculty.findById(facultyId);
+  if (!faculty) {
+    throw new ApiError(404, "Faculty not found");
+  }
+
+  const facultyUserId = faculty.user;
+
+  await faculty.deleteOne();
+  if (facultyUserId) {
+    await User.findByIdAndDelete(facultyUserId);
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, { _id: facultyId }, "Faculty deleted successfully")
+    );
 });
 
 // Get All Students (For TPO Dashboard)
@@ -454,6 +616,56 @@ const getStudentDetails = asyncHandler(async (req, res) => {
   );
 });
 
+// Delete Student (Admin/TPO only)
+const deleteStudent = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN" && user.role !== "TPO") {
+    throw new ApiError(403, "Only admin and TPO can delete students");
+  }
+
+  const student = await Student.findById(studentId);
+  if (!student) {
+    throw new ApiError(404, "Student not found");
+  }
+
+  const allocatedCompanyId =
+    student.internshipData && student.internshipData.allocatedCompany
+      ? student.internshipData.allocatedCompany
+      : null;
+
+  if (allocatedCompanyId) {
+    const company = await Company.findById(allocatedCompanyId);
+    if (company) {
+      company.filledSeats = Math.max(0, (company.filledSeats || 0) - 1);
+      await company.save();
+    }
+  }
+
+  const studentUserId = student.user;
+  await student.deleteOne();
+  if (studentUserId) {
+    await User.findByIdAndDelete(studentUserId);
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, { _id: studentId }, "Student deleted successfully")
+    );
+});
+
 // Update Student Details (Admin: update all fields of user and student by email)
 const updateStudentProfile = asyncHandler(async (req, res) => {
   const {
@@ -543,13 +755,99 @@ const updateStudentProfile = asyncHandler(async (req, res) => {
   );
 });
 
-// Allocate Company to Student by Choice Priority
+// Reset all Student Applications (Admin only)
+const choiceResetAllStudentApplications = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN") {
+    throw new ApiError(403, "Only admin can reset student applications");
+  }
+
+  // Reset internshipData for all students (preserve preferredDomains)
+  await Student.updateMany(
+    {},
+    {
+      $set: {
+        "internshipData.choices": [],
+        "internshipData.isFormSubmitted": false,
+        "internshipData.allocationStatus": null,
+        "internshipData.approvalStatus": null,
+        "internshipData.allocatedCompany": null,
+        "internshipData.approvalStatusHistory": [],
+      }
+    }
+  );
+
+  // Reset filledSeats for all companies
+  await Company.updateMany({}, { $set: { filledSeats: 0 } });
+
+  return res.status(200).json(
+    new ApiResponse(200, {}, "All student applications have been reset")
+  );
+});
+
+// Reset all Student Applications (Admin only)
+const fullResetAllStudentApplications = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  if (user.role !== "ADMIN") {
+    throw new ApiError(403, "Only admin can reset student applications");
+  }
+
+  // Reset internshipData for all students
+  await Student.updateMany(
+    {},
+    {
+      $set: {
+        "internshipData": {
+          preferredDomains: [],
+          choices: [],
+          isFormSubmitted: false,
+          allocationStatus: null,
+          approvalStatus: null,
+          allocatedCompany: null,
+          approvalStatusHistory: [],
+        }
+      }
+    }
+  );
+
+  // Reset filledSeats for all companies
+  await Company.updateMany({}, { $set: { filledSeats: 0 } });
+
+  return res.status(200).json(
+    new ApiResponse(200, {}, "All student applications have been reset")
+  );
+});
+
+  // Allocate Company to Student 
 const allocateCompanyToStudent = asyncHandler(async (req, res) => {
   // Accept either studentId or studentEmail
-  const { studentId } = req.body;
+  const { studentId, companyId } = req.body;
 
   if (!studentId) {
     throw new ApiError(400, "studentId is required");
+  }
+  if (!companyId) {
+    throw new ApiError(400, "companyId is required");
   }
 
   const userId = req.user?._id;
@@ -574,55 +872,49 @@ const allocateCompanyToStudent = asyncHandler(async (req, res) => {
     throw new ApiError(400, `Student already allocated to a company: ${student.internshipData.allocatedCompany}`);
   }
 
+  // Check company choices exist and sheet is not empty
+  
   // Get choices (should be array of up to 4)
   const choices = (student.internshipData && Array.isArray(student.internshipData.choices)) ? student.internshipData.choices : [];
   if (!choices.length) {
     throw new ApiError(400, "No choices found for student");
   }
 
-  // Try each choice by priority
-  student.internshipData = student.internshipData || {};
-  let allocated = null;
-  for (let i = 0; i < choices.length; i++) {
-    const choice = choices[i];
-    if (!choice.company) continue;
-    // Find company
-    const company = await Company.findById(choice.company);
-    if (!company || !company.isActive) continue;
-    // Check seat availability
-    if (company.filledSeats < company.totalSeats) {
-      // Allocate
-      student.internshipData.allocatedCompany = company._id;
-      student.internshipData.allocationStatus = "ALLOCATED";
-      student.internshipData.approvalStatus = "ALLOCATED";
-      // Update timeline history: APPROVED_BY_TPO (with date), ALLOCATED (null date)
-      if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
-        student.internshipData.approvalStatusHistory = [];
-      }
-      student.internshipData.approvalStatusHistory.push({ status: "APPROVED_BY_TPO", createdAt: new Date() });
-      student.internshipData.approvalStatusHistory.push({ status: "ALLOCATED", createdAt: null });
-      await student.save();
-      // Increment filledSeats
-      company.filledSeats += 1;
-      await company.save();
-      allocated = company;
-      break;
-    }
+  // Ensure companyId is among student's choices
+  const selectedChoice = choices.find(
+    (choice) => choice.company && choice.company.toString() === companyId.toString()
+  );
+  if (!selectedChoice) {
+    throw new ApiError(400, "Selected company is not in student's choices");
   }
 
-  if (allocated) {
-    return res.status(200).json(new ApiResponse(200, { allocatedCompany: allocated }, "Company allocated successfully"));
-  } else {
-    // No company available
-    student.internshipData.allocationStatus = "NOT_ALLOCATED";
-    // Update timeline history: NOT_ALLOCATED (with date)
-    if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
-      student.internshipData.approvalStatusHistory = [];
-    }
-    student.internshipData.approvalStatusHistory.push({ status: "NOT_ALLOCATED", createdAt: new Date() });
-    await student.save();
-    return res.status(200).json(new ApiResponse(200, {}, "No company available for allocation"));
+  const company = await Company.findById(companyId);
+  if (!company || company.recruitmentStatus !== "OPEN") {
+    throw new ApiError(404, "Company not found or not open for recruitment");
   }
+
+  if (company.filledSeats >= company.totalSeats) {
+    throw new ApiError(400, "No seats available in selected company");
+  }
+
+  // Allocate selected company
+  student.internshipData = student.internshipData || {};
+  student.internshipData.allocatedCompany = company._id;
+  student.internshipData.allocationStatus = "ALLOCATED";
+  student.internshipData.approvalStatus = "ALLOCATED";
+  if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+    student.internshipData.approvalStatusHistory = [];
+  }
+  student.internshipData.approvalStatusHistory.push({ status: "APPROVED_BY_TPO", createdAt: new Date() });
+  student.internshipData.approvalStatusHistory.push({ status: "ALLOCATED", createdAt: null });
+  await student.save();
+
+  company.filledSeats += 1;
+  await company.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, { allocatedCompany: company }, "Company allocated successfully")
+  );
 });
 
 // Reject Student Application
@@ -745,12 +1037,228 @@ const updateStudentAllocatedCompany = asyncHandler(async (req, res) => {
   );
 });
 
+// Download Student Temporary password Excel
+const downloadStudentTempPassword = asyncHandler(async (req, res) => {
+  // Aggregate students with user info, sort by registrationNumber
+  const students = await Student.aggregate([
+    {
+      $lookup: {
+        from: "users",
+        localField: "user",
+        foreignField: "_id",
+        as: "userInfo"
+      }
+    },
+    { $unwind: "$userInfo" },
+    {
+      $lookup: {
+        from: "branches",
+        localField: "branch",
+        foreignField: "_id",
+        as: "branchInfo"
+      }
+    },
+    { $unwind: "$branchInfo" },
+    { $sort: { registrationNumber: 1 } }
+  ]);
+
+  if (!students || students.length === 0) {
+    throw new ApiError(404, "No students found");
+  }
+
+  // Prepare data for Excel
+  const data = students.map(student => ({
+    "Name": student.fullName,
+    "Registration Number": student.registrationNumber || "",
+    "Roll Number": student.rollNumber || "",
+    "Branch": student.branchInfo.name || "",
+    "Year": student.year || "",
+    "phoneNumber": student.phoneNumber || "",
+    "Email": student.email || "",
+    "Temporary Password": student.userInfo.tempPassword || "N/A"
+  }));
+
+  // Create worksheet and workbook
+  const worksheet = xlsx.utils.json_to_sheet(data);
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Students");
+
+  // Write to buffer
+  const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  // Set headers and send file
+  res.setHeader("Content-Disposition", "attachment; filename=student_temp_passwords.xlsx");
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return res.status(200).send(buffer);
+});
+
+// Download Student Applications Company wise
+const downloadCompanyStudents = asyncHandler(async (req, res) => {
+  const { companyId, type } = req.body;
+
+  if (!companyId) {
+    throw new ApiError(400, "companyId is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(companyId)) {
+    throw new ApiError(400, "Invalid companyId");
+  }
+
+  const company = await Company.findById(companyId).select("name");
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  const normalizedType = (type || "all").toString().toLowerCase().replace(/\s+/g, "_");
+  const baseQuery = { "internshipData.choices.company": companyId };
+  const query =
+    normalizedType === "alloted" || normalizedType === "allocated"
+      ? { ...baseQuery, "internshipData.allocatedCompany": companyId }
+      : normalizedType === "not_alloted" || normalizedType === "not_allocated"
+        ? { ...baseQuery, "internshipData.allocatedCompany": { $ne: companyId } }
+        : baseQuery;
+
+  const students = await Student.find(query)
+    .populate("branch", "name")
+    .populate("internshipData.choices.company", "name")
+    .populate("internshipData.choices.domain", "name");
+
+  if (!students || students.length === 0) {
+    throw new ApiError(404, "No students found for this company");
+  }
+
+  const data = students.map((student) => {
+    const matchedChoice = student?.internshipData?.choices?.find(
+      (choice) => choice?.company?._id?.toString() === companyId.toString()
+    );
+
+    return {
+      "Name": student.fullName || "",
+      "Registration Number": student.registrationNumber || "",
+      "Roll Number": student.rollNumber || "",
+      "Branch": student.branch?.name || "",
+      "Year": student.year || "",
+      "Phone Number": student.phoneNumber || "",
+      "Email": student.email || "",
+      "Allocated Company": company.name || "",
+      "Choice Priority": matchedChoice?.priority ?? "",
+      "Choice Location": matchedChoice?.location || "",
+      "Choice Domain": matchedChoice?.domain?.name || "",
+      "Choice Resume": matchedChoice?.resume || "",
+      "Approval Status": student?.internshipData?.approvalStatus || "",
+      "Allocation Status": student?.internshipData?.allocationStatus || ""
+    };
+  });
+
+  const worksheet = xlsx.utils.json_to_sheet(data);
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Students");
+
+  const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  const safeCompanyName = (company.name || "company")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=${safeCompanyName || "company"}_allocated_students.xlsx`
+  );
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return res.status(200).send(buffer);
+});
+
+// Download all allotted or unallotted students across all companies (only those who filled choices)
+const downloadAllCompanyStudents = asyncHandler(async (req, res) => {
+  const { type } = req.query;
+  const normalizedType = (type || "alloted").toString().toLowerCase().replace(/\s+/g, "_");
+  const isAllotted = normalizedType === "alloted" || normalizedType === "allocated";
+  const baseQuery = { "internshipData.choices.0": { $exists: true } };
+  const query = isAllotted
+    ? { ...baseQuery, "internshipData.allocationStatus": "ALLOCATED" }
+    : { ...baseQuery, "internshipData.allocationStatus": { $ne: "ALLOCATED" } };
+
+  const students = await Student.find(query)
+    .populate("branch", "name")
+    .populate("internshipData.allocatedCompany", "name")
+    .populate("internshipData.choices.company", "name")
+    .populate("internshipData.choices.domain", "name");
+
+  if (!students || students.length === 0) {
+    throw new ApiError(404, "No students found");
+  }
+
+  const data = students.map((student) => {
+    const chosenCompanies = Array.isArray(student?.internshipData?.choices)
+      ? student.internshipData.choices
+          .map((c) => c?.company?.name || "")
+          .filter(Boolean)
+          .join(", ")
+      : "";
+
+    return {
+      "Name": student.fullName || "",
+      "Registration Number": student.registrationNumber || "",
+      "Roll Number": student.rollNumber || "",
+      "Branch": student.branch?.name || "",
+      "Year": student.year || "",
+      "Phone Number": student.phoneNumber || "",
+      "Email": student.email || "",
+      "Allocated Company": isAllotted ? (student?.internshipData?.allocatedCompany?.name || "") : "",
+      "Chosen Companies": chosenCompanies,
+      "Approval Status": student?.internshipData?.approvalStatus || "",
+      "Allocation Status": student?.internshipData?.allocationStatus || ""
+    };
+  });
+
+  const workbook = xlsx.utils.book_new();
+  const sheet = xlsx.utils.json_to_sheet(data);
+  xlsx.utils.book_append_sheet(workbook, sheet, isAllotted ? "Allotted" : "Unallotted");
+
+  const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename=all_company_${isAllotted ? "alloted" : "unalloted"}_students.xlsx`
+  );
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return res.status(200).send(buffer);
+});
+
+// Feature flags: get/update (Admin/TPO)
+const getFeatureSettings = asyncHandler(async (req, res) => {
+  const role = req.user?.role;
+  if (role !== "ADMIN" && role !== "TPO" && role !== "FACULTY") {
+    throw new ApiError(403, "Only admin or TPO can access feature settings");
+  }
+  let settings = await FeatureSettings.findOne();
+  if (!settings) {
+    settings = await FeatureSettings.create({});
+  }
+  return res.status(200).json(new ApiResponse(200, settings, "Feature settings fetched"));
+});
+
+const updateFeatureSettings = asyncHandler(async (req, res) => {
+  const role = req.user?.role;
+  if (role !== "ADMIN" && role !== "TPO" && role !== "FACULTY") {
+    throw new ApiError(403, "Only admin or TPO can update feature settings");
+  }
+  const { enableUpdateDomain, enableApplyCompany, enableCompanyList, enableMyApplication } = req.body;
+  let settings = await FeatureSettings.findOne();
+  if (!settings) {
+    settings = await FeatureSettings.create({});
+  }
+  if (typeof enableUpdateDomain === "boolean") settings.enableUpdateDomain = enableUpdateDomain;
+  if (typeof enableApplyCompany === "boolean") settings.enableApplyCompany = enableApplyCompany;
+  if (typeof enableCompanyList === "boolean") settings.enableCompanyList = enableCompanyList;
+  if (typeof enableMyApplication === "boolean") settings.enableMyApplication = enableMyApplication;
+  await settings.save();
+  return res.status(200).json(new ApiResponse(200, settings, "Feature settings updated"));
+});
 
 
 
 
-
-//   Temperory Admin Controllers
 
 // Bulk Student registration from table (Excel upload)
 const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
@@ -830,6 +1338,10 @@ const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
       const branchId = cleanValue(row.branch_id); // external branch id from excel
       const collegeId = cleanValue(row.colg); // external college id from excel
       const year = parseInt(cleanValue(row.studentYr)); // year from excel
+      if (Number.isNaN(year)) {
+        results.push({ row: i + 1, status: "error", error: "Invalid year" });
+        continue;
+      }
       // Generate 6-digit temp password
       // NOTE: password is used for login (hashed), tempPassword is stored in plain text for reference (e.g., to show to user/admin)
       const password = generateTempPassword();
@@ -921,77 +1433,20 @@ const bulkRegisterStudentsFromTable = asyncHandler(async (req, res) => {
 
   // Only return failed/skipped students (status: "error" or "skipped")
   const failed = results.filter(r => r.status === "error" || r.status === "skipped");
+  if (failed.length > 0) {
+    const worksheet = xlsx.utils.json_to_sheet(failed);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Errors");
+    const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Disposition", "attachment; filename=bulk_register_errors.xlsx");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.status(200).send(buffer);
+  }
   return res.status(201).json(
-    new ApiResponse(201, failed, "Bulk student registration: failed/skipped students only")
+    new ApiResponse(201, [], "Bulk student registration completed successfully")
   );
 });
 
-// Test actual student bulk linkage and existence
-const testActualStudentBulk = asyncHandler(async (req, res) => {
-  console.log("testActualStudentBulk called");
-  let students = [];
-  if (req.files && req.files.length > 0) {
-    const file = req.files[0];
-    const workbook = xlsx.readFile(file.path);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    students = xlsx.utils.sheet_to_json(worksheet);
-  } else if (req.body.students) {
-    students = req.body.students;
-    if (typeof students === "string") {
-      try {
-        students = JSON.parse(students);
-      } catch (e) {
-        throw new ApiError(400, "Invalid students JSON");
-      }
-    }
-  }
-
-  if (!Array.isArray(students) || students.length === 0) {
-    throw new ApiError(400, "No student data provided");
-  }
-
-  const failedDetails = [];
-  for (let i = 0; i < students.length; i++) {
-    const row = students[i];
-    let email = row.stu_mailid || row.email;
-    if (typeof email === "string") {
-      email = email.replace(/\s+/g, "").trim();
-    }
-    const rollNumber = row.stu_no || row["Roll No."] || row.rollNumber;
-    let status = "ok";
-    let error = "";
-    // Check User exists
-    const user = await User.findOne({ email });
-    if (!user) {
-      status = "error";
-      error = "User not found";
-    }
-    // Check Student exists
-    const student = await Student.findOne({ $or: [ { email }, { rollNumber } ] });
-    if (!student) {
-      status = "error";
-      error = error ? error + ", Student not found" : "Student not found";
-    }
-    // Check linkage if both exist
-    if (user && student) {
-      if (!user.profileId || String(user.profileId) !== String(student._id)) {
-        status = "error";
-        error = error ? error + ", User.profileId mismatch" : "User.profileId mismatch";
-      }
-      if (!student.user || String(student.user) !== String(user._id)) {
-        status = "error";
-        error = error ? error + ", Student.user mismatch" : "Student.user mismatch";
-      }
-    }
-    if (status === "error" && email) {
-      failedDetails.push({ row: i + 1, email, status, error });
-    }
-  }
-  return res.status(200).json(
-    new ApiResponse(200, failedDetails, "Details of students with failed linkage or missing records")
-  );
-});
 
 // Bulk Domain Registration from table (Excel upload)
 const bulkDomainRegistrationFromTable = asyncHandler(async (req, res) => {
@@ -1163,73 +1618,6 @@ const bulkDomainRegistrationFromTable = asyncHandler(async (req, res) => {
   );
 });
 
-// Manual Domain Registeration for a Student
-const manualDomainStudentRegistration = asyncHandler(async (req, res) => {
-  // Input: { email, branchName, participate, altCareer, domainIds, salary }
-  const { email, branchName, participate, altCareer, domainIds, salary } = req.body;
-
-  if (!email || !branchName || !Array.isArray(domainIds) || domainIds.length === 0) {
-    return res.status(200).json(false);
-  }
-
-  // 1. Check User exists
-  const user = await User.findOne({ email: email.toLowerCase().trim() });
-  if (!user) {
-    return res.status(200).json(false);
-  }
-  // 2. Check Student exists
-  const student = await Student.findOne({ email: email.toLowerCase().trim() });
-  if (!student) {
-    return res.status(200).json(false);
-  }
-  // 3. Check Branch exists and matches (case-insensitive, trimmed)
-  const branch = await Branch.findOne({ _id: student.branch });
-  if (!branch || branch.name.trim().toLowerCase() !== branchName.trim().toLowerCase()) {
-    // Try fallback: match ignoring specializations (if present)
-    const allBranches = await Branch.find({});
-    const altBranch = allBranches.find(b => b.name.trim().toLowerCase() === branchName.trim().toLowerCase());
-    if (altBranch) {
-      student.branch = altBranch._id;
-    } else {
-      return res.status(200).json(false);
-    }
-  }
-  // 4. Check all domainIds exist
-  const allDomains = await Domain.find({ _id: { $in: domainIds } });
-  if (allDomains.length !== domainIds.length) {
-    return res.status(200).json(false);
-  }
-  // 5. Check if domains already registered
-  const currentDomains = (student.internshipData && Array.isArray(student.internshipData.preferredDomains))
-    ? student.internshipData.preferredDomains.map(id => id.toString())
-    : [];
-  const newDomains = domainIds.map(id => id.toString());
-  const alreadyMatch = currentDomains.length === newDomains.length && currentDomains.every(id => newDomains.includes(id));
-  if (alreadyMatch) {
-    return res.status(200).json({ status: "already_registered", domains: domainIds });
-  }
-  // Update student internshipData
-  try {
-    student.internshipData = student.internshipData || {};
-    // isParticipating
-    if (participate === "yes") {
-      student.internshipData.isParticipating = true;
-      student.internshipData.alternativeCareerPath = "";
-    } else {
-      student.internshipData.isParticipating = false;
-      student.internshipData.alternativeCareerPath = altCareer || "";
-    }
-    // Domains
-    student.internshipData.preferredDomains = domainIds;
-    // Salary
-    if (salary) student.internshipData.expectedSalary = salary;
-    await student.save();
-    return res.status(200).json({ status: "updated", domains: domainIds });
-  } catch (err) {
-    return res.status(200).json(false);
-  }
-});
-
 const getTestStudentProfile = asyncHandler(async (req, res) => {
   const {email} = req.body;
 
@@ -1258,67 +1646,113 @@ const getTestStudentProfile = asyncHandler(async (req, res) => {
     );
 });
 
-// Download Student Temporary password Excel
-const downloadStudentTempPassword = asyncHandler(async (req, res) => {
-  // Aggregate students with user info, sort by registrationNumber
-  const students = await Student.aggregate([
-    {
-      $lookup: {
-        from: "users",
-        localField: "user",
-        foreignField: "_id",
-        as: "userInfo"
-      }
-    },
-    { $unwind: "$userInfo" },
-    { $sort: { registrationNumber: 1 } }
-  ]);
+// // Allocate Company to Student by Choice Priority
+// const allocateCompanyToStudent = asyncHandler(async (req, res) => {
+//   // Accept either studentId or studentEmail
+//   const { studentId, companyId } = req.body;
 
-  if (!students || students.length === 0) {
-    throw new ApiError(404, "No students found");
-  }
+//   if (!studentId) {
+//     throw new ApiError(400, "studentId is required");
+//   }
 
-  // Prepare data for Excel
-  const data = students.map(student => ({
-    "Name": student.fullName,
-    "Registration Number": student.registrationNumber || "",
-    "Roll Number": student.rollNumber || "",
-    "Branch": student.branch ? student.branch.toString() : "",
-    "Year": student.year || "",
-    "Email": student.email || "",
-    "Temporary Password": student.userInfo.tempPassword || "N/A"
-  }));
+//   const userId = req.user?._id;
 
-  // Create worksheet and workbook
-  const worksheet = xlsx.utils.json_to_sheet(data);
-  const workbook = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(workbook, worksheet, "Students");
+//   if (!userId) {
+//     throw new ApiError(401, "Unauthorized");
+//   }
 
-  // Write to buffer
-  const buffer = xlsx.write(workbook, { type: "buffer", bookType: "xlsx" });
+//   const user = await User.findById(userId);
 
-  // Set headers and send file
-  res.setHeader("Content-Disposition", "attachment; filename=student_temp_passwords.xlsx");
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  return res.status(200).send(buffer);
-});
+//   if (!user) {
+//     throw new ApiError(404, "User not found");
+//   }
+//   if (user.role !== "ADMIN" && user.role !== "TPO") {
+//     throw new ApiError(403, "Only admin and TPO can register students");
+//   }
+
+//   const student = await Student.findById(studentId);
+
+//   // Already allocated?
+//   if (student.internshipData && student.internshipData.allocatedCompany) {
+//     throw new ApiError(400, `Student already allocated to a company: ${student.internshipData.allocatedCompany}`);
+//   }
+
+//   // Check company choices exist and sheet is not empty
+  
+//   // Get choices (should be array of up to 4)
+//   const choices = (student.internshipData && Array.isArray(student.internshipData.choices)) ? student.internshipData.choices : [];
+//   if (!choices.length) {
+//     throw new ApiError(400, "No choices found for student");
+//   }
+
+//   // Try each choice by priority
+//   student.internshipData = student.internshipData || {};
+//   let allocated = null;
+//   for (let i = 0; i < choices.length; i++) {
+//     const choice = choices[i];
+//     if (!choice.company) continue;
+//     // Find company
+//     const company = await Company.findById(choice.company);
+//     if (!company || !company.isActive) continue;
+//     // Check seat availability
+//     if (company.filledSeats < company.totalSeats) {
+//       // Allocate
+//       student.internshipData.allocatedCompany = company._id;
+//       student.internshipData.allocationStatus = "ALLOCATED";
+//       student.internshipData.approvalStatus = "ALLOCATED";
+//       // Update timeline history: APPROVED_BY_TPO (with date), ALLOCATED (null date)
+//       if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+//         student.internshipData.approvalStatusHistory = [];
+//       }
+//       student.internshipData.approvalStatusHistory.push({ status: "APPROVED_BY_TPO", createdAt: new Date() });
+//       student.internshipData.approvalStatusHistory.push({ status: "ALLOCATED", createdAt: null });
+//       await student.save();
+//       // Increment filledSeats
+//       company.filledSeats += 1;
+//       await company.save();
+//       allocated = company;
+//       break;
+//     }
+//   }
+
+//   if (allocated) {
+//     return res.status(200).json(new ApiResponse(200, { allocatedCompany: allocated }, "Company allocated successfully"));
+//   } else {
+//     // No company available
+//     student.internshipData.allocationStatus = "NOT_ALLOCATED";
+//     // Update timeline history: NOT_ALLOCATED (with date)
+//     if (!Array.isArray(student.internshipData.approvalStatusHistory)) {
+//       student.internshipData.approvalStatusHistory = [];
+//     }
+//     student.internshipData.approvalStatusHistory.push({ status: "NOT_ALLOCATED", createdAt: new Date() });
+//     await student.save();
+//     return res.status(200).json(new ApiResponse(200, {}, "No company available for allocation"));
+//   }
+// });
 
 export {
   registerStudent,
   registerFaculty,
+  updateFaculty,
+  deleteFaculty,
   getAllStudents,
   getAllFaculties,
   getStudentDetails,
+  deleteStudent,
   updateStudentProfile,
   getAllStudentsApplications,
   allocateCompanyToStudent,
   rejectStudentApplication,
   updateStudentAllocatedCompany,
+  choiceResetAllStudentApplications,
+  fullResetAllStudentApplications,
   bulkRegisterStudentsFromTable,
   getTestStudentProfile,
-  testActualStudentBulk,
   bulkDomainRegistrationFromTable,
-  manualDomainStudentRegistration,
-  downloadStudentTempPassword
+  downloadStudentTempPassword,
+  downloadCompanyStudents,
+  downloadAllCompanyStudents,
+  getFeatureSettings,
+  updateFeatureSettings
   
 };
